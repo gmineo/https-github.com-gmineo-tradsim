@@ -1,14 +1,14 @@
-
 import React from 'react';
 import { Button } from './Button';
-import { TrendingUp, Activity } from 'lucide-react';
+import { Activity, Loader2 } from 'lucide-react';
 import { audioService } from '../services/audioService';
 
 interface IntroScreenProps {
   onStart: () => void;
+  isLoading?: boolean;
 }
 
-export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart }) => {
+export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = false }) => {
   
   const handleStart = () => {
     audioService.init(); // Initialize AudioContext on user gesture
@@ -26,17 +26,28 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart }) => {
         TRADING SIMULATOR
       </h1>
       
-      <p className="text-slate-300 text-lg mb-12 max-w-md leading-relaxed">
+      <p className="text-slate-300 text-lg mb-8 max-w-md leading-relaxed">
         You have <b>$500</b>. <br/>
-        Test your instincts on 3 mystery historical stocks.<br/>
+        Test your instincts on <b>3 historical market scenarios</b>.<br/>
         <span className="text-sm mt-4 block text-slate-400">
           Tap & Hold to BUY • Release to SELL
         </span>
       </p>
 
-      <Button onClick={handleStart} fullWidth className="max-w-xs animate-pulse">
-        START SESSION
-      </Button>
+      <div className="flex flex-col gap-4 w-full max-w-xs">
+        <Button onClick={handleStart} fullWidth className="animate-pulse" disabled={isLoading}>
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="animate-spin" size={20} /> LOADING MARKETS...
+            </span>
+          ) : (
+            "START CAREER MODE"
+          )}
+        </Button>
+        <p className="text-[10px] text-slate-500 mt-2">
+          Data: Real Historical CSVs
+        </p>
+      </div>
     </div>
   );
 };

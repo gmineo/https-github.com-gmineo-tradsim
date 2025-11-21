@@ -1,87 +1,101 @@
 import { StockData, PricePoint } from '../types';
 
-const STOCK_NAMES = [
-  { name: 'NVIDIA Corp', ticker: 'NVDA' },
-  { name: 'Tesla Inc', ticker: 'TSLA' },
-  { name: 'Apple Inc', ticker: 'AAPL' },
-  { name: 'Microsoft Corp', ticker: 'MSFT' },
-  { name: 'Amazon.com', ticker: 'AMZN' },
-  { name: 'Meta Platforms', ticker: 'META' },
-  { name: 'Netflix Inc', ticker: 'NFLX' },
-  { name: 'AMD', ticker: 'AMD' },
-  { name: 'Alphabet Inc', ticker: 'GOOGL' },
-  { name: 'Gamestop', ticker: 'GME' },
-];
-
-// Helper to format date
-const formatDate = (date: Date): string => {
-  const d = date.getDate().toString().padStart(2, '0');
-  const m = (date.getMonth() + 1).toString().padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}-${m}-${y}`;
-};
-
-// Generate a random walk with trend
-const generatePricePath = (startPrice: number, volatility: number, trend: number, steps: number, isIndex = false): number[] => {
-  const prices = [startPrice];
-  let currentPrice = startPrice;
-
-  for (let i = 1; i < steps; i++) {
-    const change = (Math.random() - 0.5) * volatility + trend;
-    // Add some momentum logic for stocks (not index)
-    const momentum = isIndex ? 0 : (Math.random() - 0.5) * (volatility * 0.5);
-    
-    const percentChange = change + momentum;
-    currentPrice = currentPrice * (1 + percentChange);
-    
-    if (currentPrice < 0.01) currentPrice = 0.01; // Prevent negative prices
-    prices.push(currentPrice);
-  }
-  return prices;
-};
-
-export const generateSessionStocks = (): StockData[] => {
-  // Shuffle names
-  const shuffled = [...STOCK_NAMES].sort(() => 0.5 - Math.random());
+// Helper: Parse CSV text into StockData
+const parseCustomCSV = (csvText: string, name: string, ticker: string): StockData => {
+  // Handle different newline formats (CRLF, LF, CR)
+  const lines = csvText.trim().split(/\r\n|\n|\r/);
+  const data: PricePoint[] = [];
   
-  // Limit to 3 stocks for the game session
-  const selectedStocks = shuffled.slice(0, 3);
-  
-  return selectedStocks.map((stock, index) => {
-    const steps = 150; // Number of data points in the chart
-    const startDate = new Date(2020 + Math.floor(Math.random() * 4), Math.floor(Math.random() * 11), 1);
-    
-    // Randomize volatility and trend to create diverse scenarios
-    // Volatility: 0.01 to 0.05 (1% to 5% daily swings)
-    const volatility = 0.015 + Math.random() * 0.03; 
-    // Trend: Slight bias up or down (-0.5% to +0.5% average drift)
-    const trend = (Math.random() - 0.45) * 0.01; 
+  // Skip header (assume row 0 is header)
+  // In case of messy data, we look for the first line starting with a number or specific format
+  const startIndex = lines[0]?.toLowerCase().includes('date') ? 1 : 0;
 
-    const startPrice = 100 + Math.random() * 400;
-    const stockPrices = generatePricePath(startPrice, volatility, trend, steps);
-    
-    // S&P 500 usually less volatile, slight upward trend generally
-    const sp500Start = 3500 + Math.random() * 1000;
-    const sp500Prices = generatePricePath(sp500Start, 0.008, 0.0005, steps, true);
+  // Parse rows (Reverse to get oldest first if CSV is newest first)
+  const parsedRows = [];
 
-    const data: PricePoint[] = stockPrices.map((price, i) => {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + (i * 3)); // Skip a few days to simulate time
-      return {
-        date: formatDate(date),
-        price: price,
-        sp500: sp500Prices[i],
-        timestamp: date.getTime(),
-      };
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Handle potential messy CSVs (comma separation)
+    const parts = line.split(',');
+    if (parts.length < 2) continue;
+
+    const dateStr = parts[0].trim();
+    const priceVal = parseFloat(parts[1].trim());
+
+    if (isNaN(priceVal)) continue;
+
+    parsedRows.push({
+      date: dateStr,
+      price: priceVal,
+      timestamp: new Date(dateStr).getTime()
     });
+  }
+
+  // Sort by date ascending (Oldest -> Newest)
+  parsedRows.sort((a, b) => a.timestamp - b.timestamp);
+
+  // Generate fake S&P 500 comparison data if not present
+  // We simulate a market correlation of 0.6 with some noise
+  let currentSP500 = 2000; // Base 2000 approx for 2015/general
+  
+  const finalData: PricePoint[] = parsedRows.map((row, idx) => {
+    if (idx > 0) {
+      const prevPrice = parsedRows[idx - 1].price;
+      const priceChange = (row.price - prevPrice) / prevPrice;
+      
+      // S&P moves somewhat correlated but less volatile usually
+      const marketMove = (priceChange * 0.6) + ((Math.random() - 0.5) * 0.005);
+      currentSP500 = currentSP500 * (1 + marketMove);
+    }
 
     return {
-      id: `stock-${index}`,
-      name: stock.name,
-      ticker: stock.ticker,
-      periodStart: data[0].date,
-      periodEnd: data[data.length - 1].date,
-      data,
+      ...row,
+      sp500: currentSP500
     };
   });
+
+  return {
+    id: ticker,
+    name,
+    ticker,
+    periodStart: finalData[0]?.date || 'Start',
+    periodEnd: finalData[finalData.length - 1]?.date || 'End',
+    data: finalData
+  };
+};
+
+export const loadGameData = async (): Promise<StockData[]> => {
+  const datasets = [
+    { url: 'coke.csv', name: 'Coca-Cola (2015)', ticker: 'KO' },
+    { url: 'btc.csv', name: 'Bitcoin (2022)', ticker: 'BTC' },
+    { url: 'aapl.csv', name: 'Apple (2015)', ticker: 'AAPL' }
+  ];
+
+  try {
+    const promises = datasets.map(async (ds) => {
+      try {
+        const response = await fetch(ds.url);
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const text = await response.text();
+        return parseCustomCSV(text, ds.name, ds.ticker);
+      } catch (err) {
+        console.error(`Failed to load ${ds.url}:`, err);
+        return null;
+      }
+    });
+
+    const results = await Promise.all(promises);
+    // Important: Filter out stocks that failed to load or have no data to prevent crashes
+    return results.filter((item): item is StockData => item !== null && item.data && item.data.length > 0);
+  } catch (e) {
+    console.error("Critical error loading game data", e);
+    return [];
+  }
+};
+
+// Kept for compatibility if needed, but main app uses loadGameData now
+export const getStaticStocks = (): StockData[] => {
+  return [];
 };
