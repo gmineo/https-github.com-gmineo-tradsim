@@ -5,12 +5,15 @@ import { AnalysisScreen } from './components/AnalysisScreen';
 import { GameOverScreen } from './components/GameOverScreen';
 import { loadGameData } from './services/stockService';
 import { GameState, StockData, TradeResult } from './types';
+import { Button } from './components/Button';
+import { AlertTriangle } from 'lucide-react';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.INTRO);
   const [stocks, setStocks] = useState<StockData[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Global Capital State
   const [capital, setCapital] = useState(500);
@@ -24,10 +27,11 @@ export default function App() {
 
   const startGame = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const newStocks = await loadGameData();
       if (newStocks.length === 0) {
-        alert("Could not load valid market data. Please ensure csv files are in the root directory and correctly formatted.");
+        setLoadError("Could not load market data. If you are on Netlify, ensure 'coke.csv', 'btc.csv', and 'aapl.csv' are inside a 'public' folder.");
         setIsLoading(false);
         return;
       }
@@ -39,7 +43,7 @@ export default function App() {
       setInitialCapitalForCurrentStock(500);
     } catch (e) {
       console.error(e);
-      alert("Error starting game.");
+      setLoadError("Network error or missing files.");
     } finally {
       setIsLoading(false);
     }
@@ -107,35 +111,46 @@ export default function App() {
 
   return (
     <div className="w-full h-full bg-slate-900 text-slate-100 font-sans overflow-hidden">
-      {gameState === GameState.INTRO && (
-        <IntroScreen 
-          onStart={startGame} 
-          isLoading={isLoading}
-        />
-      )}
+      {loadError ? (
+        <div className="h-screen w-full flex flex-col items-center justify-center p-6 text-center bg-slate-900">
+          <AlertTriangle size={64} className="text-red-500 mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Data Load Error</h2>
+          <p className="text-slate-400 mb-8 max-w-md">{loadError}</p>
+          <Button onClick={startGame}>RETRY</Button>
+        </div>
+      ) : (
+        <>
+          {gameState === GameState.INTRO && (
+            <IntroScreen 
+              onStart={startGame} 
+              isLoading={isLoading}
+            />
+          )}
 
-      {/* Render TradingScreen for both TRADING and ANALYSIS states to keep chart in background */}
-      {(gameState === GameState.TRADING || gameState === GameState.ANALYSIS) && stocks[currentIndex] && stocks[currentIndex].data && stocks[currentIndex].data.length > 0 && (
-        <TradingScreen 
-          stock={stocks[currentIndex]} 
-          currentCapital={capital}
-          onComplete={handleStockComplete}
-        />
-      )}
+          {/* Render TradingScreen for both TRADING and ANALYSIS states to keep chart in background */}
+          {(gameState === GameState.TRADING || gameState === GameState.ANALYSIS) && stocks[currentIndex] && stocks[currentIndex].data && stocks[currentIndex].data.length > 0 && (
+            <TradingScreen 
+              stock={stocks[currentIndex]} 
+              currentCapital={capital}
+              onComplete={handleStockComplete}
+            />
+          )}
 
-      {gameState === GameState.ANALYSIS && lastResult && stocks[currentIndex] && (
-        <AnalysisScreen 
-          result={lastResult} 
-          stock={stocks[currentIndex]}
-          onNext={handleNextStock} 
-        />
-      )}
+          {gameState === GameState.ANALYSIS && lastResult && stocks[currentIndex] && (
+            <AnalysisScreen 
+              result={lastResult} 
+              stock={stocks[currentIndex]}
+              onNext={handleNextStock} 
+            />
+          )}
 
-      {gameState === GameState.GAMEOVER && (
-        <GameOverScreen 
-          history={history} 
-          onRestart={() => setGameState(GameState.INTRO)} 
-        />
+          {gameState === GameState.GAMEOVER && (
+            <GameOverScreen 
+              history={history} 
+              onRestart={() => setGameState(GameState.INTRO)} 
+            />
+          )}
+        </>
       )}
     </div>
   );
