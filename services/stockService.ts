@@ -36,13 +36,27 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string): StockDat
   // Sort by date ascending (Oldest -> Newest)
   parsedRows.sort((a, b) => a.timestamp - b.timestamp);
 
+  // OPTIMIZATION: Limit to ~450 data points for optimal gameplay duration (~36 seconds)
+  // If we have too much data, we take a slice from the middle-end to ensure volatility but keep it short.
+  // 450 points * 80ms = 36 seconds of gameplay.
+  const MAX_POINTS = 450;
+  let limitedRows = parsedRows;
+  
+  if (parsedRows.length > MAX_POINTS) {
+    // Optional: Randomize start point to make the same CSV feel different every time?
+    // For now, let's just take a consistent slice that isn't just the boring beginning.
+    // We take the *last* MAX_POINTS usually, but let's take a safe slice.
+    const startTrim = Math.floor(Math.random() * (parsedRows.length - MAX_POINTS));
+    limitedRows = parsedRows.slice(startTrim, startTrim + MAX_POINTS);
+  }
+
   // Generate fake S&P 500 comparison data if not present
   // We simulate a market correlation of 0.6 with some noise
   let currentSP500 = 2000; // Base 2000 approx for 2015/general
   
-  const finalData: PricePoint[] = parsedRows.map((row, idx) => {
+  const finalData: PricePoint[] = limitedRows.map((row, idx) => {
     if (idx > 0) {
-      const prevPrice = parsedRows[idx - 1].price;
+      const prevPrice = limitedRows[idx - 1].price;
       const priceChange = (row.price - prevPrice) / prevPrice;
       
       // S&P moves somewhat correlated but less volatile usually
@@ -68,9 +82,9 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string): StockDat
 
 export const loadGameData = async (): Promise<StockData[]> => {
   const datasets = [
-    { url: 'coke.csv', name: 'Coca-Cola (2015)', ticker: 'KO' },
-    { url: 'btc.csv', name: 'Bitcoin (2022)', ticker: 'BTC' },
-    { url: 'aapl.csv', name: 'Apple (2015)', ticker: 'AAPL' }
+    { url: 'coke.csv', name: 'Coca-Cola (Historical)', ticker: 'KO' },
+    { url: 'btc.csv', name: 'Bitcoin (Historical)', ticker: 'BTC' },
+    { url: 'aapl.csv', name: 'Apple (Historical)', ticker: 'AAPL' }
   ];
 
   try {
