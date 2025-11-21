@@ -1,3 +1,4 @@
+
 import { LeaderboardEntry } from '../types';
 
 const STORAGE_KEY = 'trading_simulator_leaderboard';

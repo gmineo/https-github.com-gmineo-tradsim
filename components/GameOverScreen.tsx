@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { TradeResult, LeaderboardEntry, RankInfo, Achievement } from '../types';
 import { Button } from './Button';
@@ -42,6 +43,10 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   const totalTrades = history.reduce((acc, curr) => acc + curr.tradeCount, 0);
   const totalWins = history.reduce((acc, curr) => acc + curr.winningTrades, 0);
   const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
+
+  const averageUserReturn = history.length > 0
+    ? history.reduce((acc, curr) => acc + curr.userReturnPercent, 0) / history.length
+    : 0;
 
   const averageSP500Return = history.length > 0 
     ? history.reduce((acc, curr) => acc + curr.sp500ReturnPercent, 0) / history.length 
@@ -263,18 +268,24 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
         )}
 
         {/* 5. Quick Stats Grid */}
-        <div className="grid grid-cols-3 gap-2 mb-6 max-w-md mx-auto w-full">
-          <div className="bg-slate-800 p-2 rounded border border-slate-700 text-center">
+        <div className="grid grid-cols-2 gap-3 mb-6 max-w-md mx-auto w-full">
+          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Best Trade</span>
-            <span className="text-xs font-bold text-emerald-400">{formatPct(bestTrade)}</span>
+            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade)}</span>
           </div>
-          <div className="bg-slate-800 p-2 rounded border border-slate-700 text-center">
+          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Accuracy</span>
-            <span className="text-xs font-bold text-blue-400">{winRate.toFixed(0)}%</span>
+            <span className="text-sm font-bold text-blue-400">{winRate.toFixed(0)}%</span>
           </div>
-          <div className="bg-slate-800 p-2 rounded border border-slate-700 text-center">
-            <span className="text-[9px] text-slate-500 uppercase font-bold block">vs Market</span>
-            <span className={`text-xs font-bold ${averageSP500Return >= 0 ? 'text-slate-300' : 'text-red-400'}`}>
+          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
+            <span className="text-[9px] text-slate-500 uppercase font-bold block">Avg User Return</span>
+            <span className={`text-sm font-bold ${averageUserReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {formatPct(averageUserReturn / 100)}
+            </span>
+          </div>
+          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
+            <span className="text-[9px] text-slate-500 uppercase font-bold block">Avg S&P 500</span>
+            <span className={`text-sm font-bold ${averageSP500Return >= 0 ? 'text-slate-300' : 'text-red-400'}`}>
               {formatPct(averageSP500Return / 100)}
             </span>
           </div>
