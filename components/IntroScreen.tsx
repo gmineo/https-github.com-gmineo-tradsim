@@ -1,20 +1,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
-import { Activity, Loader2, Trophy, Medal } from 'lucide-react';
+import { Activity, Loader2, Trophy, Medal, Sliders } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { getCombinedLeaderboard } from '../services/leaderboardService';
 import { LeaderboardEntry } from '../types';
 import { isFirebaseConfigured } from '../services/firebase';
 
 interface IntroScreenProps {
-  onStart: () => void;
+  onStart: (rounds: number) => void;
   isLoading?: boolean;
 }
 
 export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = false }) => {
   const [topPlayers, setTopPlayers] = useState<LeaderboardEntry[]>([]);
   const [loadingLb, setLoadingLb] = useState(true);
+  const [roundCount, setRoundCount] = useState(3);
 
   useEffect(() => {
     const fetchLb = async () => {
@@ -32,7 +33,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
   
   const handleStart = () => {
     audioService.init(); // Initialize AudioContext on user gesture
-    onStart();
+    onStart(roundCount);
   };
 
   const getRankIcon = (index: number) => {
@@ -51,17 +52,37 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
           <Activity size={80} className="text-blue-400 relative z-10" />
         </div>
         
-        <h1 className="text-4xl font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+        <h1 className="text-4xl font-black tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
           TRADING SIMULATOR
         </h1>
         
-        <p className="text-slate-300 text-lg mb-8 max-w-md leading-relaxed">
-          You have <b>$500</b>. <br/>
-          Test your instincts on <b>3 historical market scenarios</b>.<br/>
-          <span className="text-sm mt-4 block text-slate-400">
-            Tap & Hold to BUY • Release to SELL
-          </span>
+        <p className="text-slate-300 text-lg mb-6 max-w-md leading-relaxed">
+          You have <b>$500</b> per trade. <br/>
+          Test your instincts against historical data.
         </p>
+
+        {/* GAME SETTINGS */}
+        <div className="w-full bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 mb-8">
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2 text-slate-300 font-bold text-sm">
+              <Sliders size={16} />
+              MARKETS TO TRADE
+            </div>
+            <span className="text-2xl font-black text-blue-400">{roundCount}</span>
+          </div>
+          <input 
+            type="range" 
+            min="1" 
+            max="10" 
+            value={roundCount} 
+            onChange={(e) => setRoundCount(parseInt(e.target.value))}
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+          />
+          <div className="flex justify-between text-[10px] text-slate-500 mt-2 font-mono">
+            <span>QUICK</span>
+            <span>MARATHON</span>
+          </div>
+        </div>
 
         <div className="flex flex-col gap-4 w-full max-w-xs mb-10">
           <Button onClick={handleStart} fullWidth className="animate-pulse" disabled={isLoading}>
@@ -74,7 +95,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
             )}
           </Button>
           <p className="text-[10px] text-slate-500">
-            Data: Real Historical CSVs
+            Data: Real Historical CSVs (Randomized)
           </p>
         </div>
 

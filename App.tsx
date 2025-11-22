@@ -25,11 +25,13 @@ export default function App() {
   // Temporary result holder for the Analysis Screen
   const [lastResult, setLastResult] = useState<TradeResult | null>(null);
 
-  const startGame = async () => {
+  const startGame = async (rounds: number) => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const newStocks = await loadGameData();
+      // Load random stocks based on user selection
+      const newStocks = await loadGameData(rounds);
+      
       if (newStocks.length === 0) {
         setLoadError("Could not load market data. If you are on Netlify, ensure 'coke.csv', 'btc.csv', and 'aapl.csv' are inside a 'public' folder.");
         setIsLoading(false);
@@ -116,7 +118,7 @@ export default function App() {
           <AlertTriangle size={64} className="text-red-500 mb-4" />
           <h2 className="text-2xl font-bold text-white mb-2">Data Load Error</h2>
           <p className="text-slate-400 mb-8 max-w-md">{loadError}</p>
-          <Button onClick={startGame}>RETRY</Button>
+          <Button onClick={() => startGame(3)}>RETRY</Button>
         </div>
       ) : (
         <>

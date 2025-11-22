@@ -1,23 +1,20 @@
 import { StockData, PricePoint } from '../types';
 
 // Helper: Parse CSV text into StockData
-const parseCustomCSV = (csvText: string, name: string, ticker: string): StockData => {
+const parseCustomCSV = (csvText: string, name: string, ticker: string, uniqueId: string): StockData => {
   // Handle different newline formats (CRLF, LF, CR)
   const lines = csvText.trim().split(/\r\n|\n|\r/);
-  const data: PricePoint[] = [];
   
   // Skip header (assume row 0 is header)
-  // In case of messy data, we look for the first line starting with a number or specific format
   const startIndex = lines[0]?.toLowerCase().includes('date') ? 1 : 0;
 
-  // Parse rows (Reverse to get oldest first if CSV is newest first)
+  // Parse rows
   const parsedRows = [];
 
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Handle potential messy CSVs (comma separation)
     const parts = line.split(',');
     if (parts.length < 2) continue;
 
@@ -36,30 +33,25 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string): StockDat
   // Sort by date ascending (Oldest -> Newest)
   parsedRows.sort((a, b) => a.timestamp - b.timestamp);
 
-  // OPTIMIZATION: Limit to ~450 data points for optimal gameplay duration (~36 seconds)
-  // If we have too much data, we take a slice from the middle-end to ensure volatility but keep it short.
-  // 450 points * 80ms = 36 seconds of gameplay.
+  // OPTIMIZATION: Limit to ~450 data points (approx 36s gameplay)
   const MAX_POINTS = 450;
   let limitedRows = parsedRows;
   
   if (parsedRows.length > MAX_POINTS) {
-    // Optional: Randomize start point to make the same CSV feel different every time?
-    // For now, let's just take a consistent slice that isn't just the boring beginning.
-    // We take the *last* MAX_POINTS usually, but let's take a safe slice.
-    const startTrim = Math.floor(Math.random() * (parsedRows.length - MAX_POINTS));
+    // CRITICAL: Randomize start point. This allows the same CSV file to generate 
+    // multiple different "levels" if selected multiple times.
+    const maxStart = parsedRows.length - MAX_POINTS;
+    const startTrim = Math.floor(Math.random() * maxStart);
     limitedRows = parsedRows.slice(startTrim, startTrim + MAX_POINTS);
   }
 
-  // Generate fake S&P 500 comparison data if not present
-  // We simulate a market correlation of 0.6 with some noise
-  let currentSP500 = 2000; // Base 2000 approx for 2015/general
+  // Generate fake S&P 500 comparison data
+  let currentSP500 = 2000;
   
   const finalData: PricePoint[] = limitedRows.map((row, idx) => {
     if (idx > 0) {
       const prevPrice = limitedRows[idx - 1].price;
       const priceChange = (row.price - prevPrice) / prevPrice;
-      
-      // S&P moves somewhat correlated but less volatile usually
       const marketMove = (priceChange * 0.6) + ((Math.random() - 0.5) * 0.005);
       currentSP500 = currentSP500 * (1 + marketMove);
     }
@@ -71,7 +63,7 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string): StockDat
   });
 
   return {
-    id: ticker,
+    id: uniqueId, // Use unique ID to allow duplicates of same stock in one session
     name,
     ticker,
     periodStart: finalData[0]?.date || 'Start',
@@ -80,20 +72,32 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string): StockDat
   };
 };
 
-export const loadGameData = async (): Promise<StockData[]> => {
-  const datasets = [
-    { url: 'coke.csv', name: 'Coca-Cola (Historical)', ticker: 'KO' },
-    { url: 'btc.csv', name: 'Bitcoin (Historical)', ticker: 'BTC' },
-    { url: 'aapl.csv', name: 'Apple (Historical)', ticker: 'AAPL' }
-  ];
+// Defines the pool of available files on the server
+const DATASET_POOL = [
+  { url: 'coke.csv', name: 'Coca-Cola', ticker: 'KO' },
+  { url: 'btc.csv', name: 'Bitcoin', ticker: 'BTC' },
+  { url: 'aapl.csv', name: 'Apple', ticker: 'AAPL' }
+];
 
+export const loadGameData = async (numberOfRounds: number = 3): Promise<StockData[]> => {
   try {
-    const promises = datasets.map(async (ds) => {
+    // Select random datasets for the requested number of rounds
+    const selection = [];
+    for (let i = 0; i < numberOfRounds; i++) {
+      const randomDataset = DATASET_POOL[Math.floor(Math.random() * DATASET_POOL.length)];
+      selection.push({
+        ...randomDataset,
+        // Append index to ensure unique ID if the same file is picked twice
+        uniqueId: `${randomDataset.ticker}-${i}-${Date.now()}` 
+      });
+    }
+
+    const promises = selection.map(async (ds) => {
       try {
         const response = await fetch(ds.url);
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
         const text = await response.text();
-        return parseCustomCSV(text, ds.name, ds.ticker);
+        return parseCustomCSV(text, ds.name, ds.ticker, ds.uniqueId);
       } catch (err) {
         console.error(`Failed to load ${ds.url}:`, err);
         return null;
@@ -101,15 +105,9 @@ export const loadGameData = async (): Promise<StockData[]> => {
     });
 
     const results = await Promise.all(promises);
-    // Important: Filter out stocks that failed to load or have no data to prevent crashes
     return results.filter((item): item is StockData => item !== null && item.data && item.data.length > 0);
   } catch (e) {
     console.error("Critical error loading game data", e);
     return [];
   }
-};
-
-// Kept for compatibility if needed, but main app uses loadGameData now
-export const getStaticStocks = (): StockData[] => {
-  return [];
 };

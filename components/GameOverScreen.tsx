@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TradeResult, LeaderboardEntry, RankInfo, Achievement } from '../types';
 import { Button } from './Button';
-import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2 } from 'lucide-react';
+import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { saveScore, getCombinedLeaderboard, calculatePercentile } from '../services/leaderboardService';
 import { playerService } from '../services/playerService';
 import { isFirebaseConfigured } from '../services/firebase';
@@ -169,7 +169,41 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         </div>
 
-        {/* 2. Progression Section (Gamification) */}
+        {/* 2. INDIVIDUAL STOCK BREAKDOWN (NEW) */}
+        <div className="mb-8">
+           <h3 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 text-center">Trade Breakdown</h3>
+           <div className="space-y-3">
+             {history.map((trade, idx) => (
+               <div key={idx} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center shadow-md">
+                  
+                  {/* Stock Info */}
+                  <div className="flex flex-col text-left w-1/3">
+                    <div className="font-black text-white text-lg leading-none">{trade.ticker}</div>
+                    <div className="text-[10px] text-slate-500 truncate">{trade.stockName}</div>
+                  </div>
+
+                  {/* Market Return Context */}
+                  <div className="flex flex-col text-center w-1/3 border-l border-slate-700/50 border-r px-2">
+                     <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Market</div>
+                     <div className={`text-xs font-bold ${trade.stockReturnPercent >= 0 ? 'text-slate-300' : 'text-slate-400'}`}>
+                        {formatPct(trade.stockReturnPercent)}
+                     </div>
+                  </div>
+
+                  {/* User Result */}
+                  <div className="flex flex-col text-right w-1/3">
+                     <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">You</div>
+                     <div className={`font-mono font-black text-sm flex items-center justify-end gap-1 ${trade.userReturnPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {trade.userReturnPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                        {formatPct(trade.userReturnPercent)}
+                     </div>
+                  </div>
+               </div>
+             ))}
+           </div>
+        </div>
+
+        {/* 3. Progression Section (Gamification) */}
         {rank && (
           <div className="mb-8 relative overflow-hidden bg-slate-800 border border-slate-700 rounded-xl p-5">
             {/* Level Up Overlay Effect */}
@@ -211,7 +245,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         )}
 
-        {/* 3. New Achievements Unlocked */}
+        {/* 4. New Achievements Unlocked */}
         {newAchievements.length > 0 && (
           <div className="mb-6 animate-in zoom-in duration-500">
              <h3 className="text-center text-yellow-400 font-bold uppercase text-xs tracking-widest mb-3 flex items-center justify-center gap-2">
@@ -236,7 +270,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         )}
 
-        {/* 4. Submit Score / Leaderboard Toggle */}
+        {/* 5. Submit Score / Leaderboard Toggle */}
         {!isSubmitted ? (
           <div className="w-full max-w-md mx-auto mb-6">
             <form onSubmit={handleSubmitScore} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -297,7 +331,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         )}
 
-        {/* 5. Quick Stats Grid */}
+        {/* 6. Quick Stats Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6 max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Best Trade</span>
@@ -321,7 +355,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         </div>
 
-        {/* 6. Socials */}
+        {/* 7. Socials */}
         <div className="flex gap-2 mb-4 max-w-md mx-auto w-full">
           <button 
             onClick={shareOnTwitter}
