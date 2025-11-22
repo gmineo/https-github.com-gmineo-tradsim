@@ -1,7 +1,11 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
-import { Activity, Loader2 } from 'lucide-react';
+import { Activity, Loader2, Trophy, Medal } from 'lucide-react';
 import { audioService } from '../services/audioService';
+import { getCombinedLeaderboard } from '../services/leaderboardService';
+import { LeaderboardEntry } from '../types';
+import { isFirebaseConfigured } from '../services/firebase';
 
 interface IntroScreenProps {
   onStart: () => void;
@@ -9,44 +13,104 @@ interface IntroScreenProps {
 }
 
 export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = false }) => {
+  const [topPlayers, setTopPlayers] = useState<LeaderboardEntry[]>([]);
+  const [loadingLb, setLoadingLb] = useState(true);
+
+  useEffect(() => {
+    const fetchLb = async () => {
+      try {
+        const data = await getCombinedLeaderboard();
+        setTopPlayers(data);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingLb(false);
+      }
+    };
+    fetchLb();
+  }, []);
   
   const handleStart = () => {
     audioService.init(); // Initialize AudioContext on user gesture
     onStart();
   };
 
-  return (
-    <div className="h-screen w-full flex flex-col items-center justify-center p-6 bg-slate-900 text-center">
-      <div className="mb-8 relative">
-        <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 rounded-full"></div>
-        <Activity size={80} className="text-blue-400 relative z-10" />
-      </div>
-      
-      <h1 className="text-4xl font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-        TRADING SIMULATOR
-      </h1>
-      
-      <p className="text-slate-300 text-lg mb-8 max-w-md leading-relaxed">
-        You have <b>$500</b>. <br/>
-        Test your instincts on <b>3 historical market scenarios</b>.<br/>
-        <span className="text-sm mt-4 block text-slate-400">
-          Tap & Hold to BUY • Release to SELL
-        </span>
-      </p>
+  const getRankIcon = (index: number) => {
+    if (index === 0) return <Trophy size={14} className="text-yellow-400" />;
+    if (index === 1) return <Medal size={14} className="text-slate-300" />;
+    if (index === 2) return <Medal size={14} className="text-amber-600" />;
+    return <span className="text-slate-500 text-xs font-mono w-3.5 text-center">{index + 1}</span>;
+  };
 
-      <div className="flex flex-col gap-4 w-full max-w-xs">
-        <Button onClick={handleStart} fullWidth className="animate-pulse" disabled={isLoading}>
-          {isLoading ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="animate-spin" size={20} /> LOADING MARKETS...
-            </span>
-          ) : (
-            "START CAREER MODE"
-          )}
-        </Button>
-        <p className="text-[10px] text-slate-500 mt-2">
-          Data: Real Historical CSVs
+  return (
+    <div className="h-screen w-full flex flex-col items-center justify-center p-6 bg-slate-900 text-center overflow-y-auto custom-scrollbar">
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
+        
+        <div className="mb-6 relative">
+          <div className="absolute inset-0 bg-blue-500 blur-3xl opacity-20 rounded-full"></div>
+          <Activity size={80} className="text-blue-400 relative z-10" />
+        </div>
+        
+        <h1 className="text-4xl font-black tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+          TRADING SIMULATOR
+        </h1>
+        
+        <p className="text-slate-300 text-lg mb-8 max-w-md leading-relaxed">
+          You have <b>$500</b>. <br/>
+          Test your instincts on <b>3 historical market scenarios</b>.<br/>
+          <span className="text-sm mt-4 block text-slate-400">
+            Tap & Hold to BUY • Release to SELL
+          </span>
         </p>
+
+        <div className="flex flex-col gap-4 w-full max-w-xs mb-10">
+          <Button onClick={handleStart} fullWidth className="animate-pulse" disabled={isLoading}>
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="animate-spin" size={20} /> LOADING MARKETS...
+              </span>
+            ) : (
+              "START CAREER MODE"
+            )}
+          </Button>
+          <p className="text-[10px] text-slate-500">
+            Data: Real Historical CSVs
+          </p>
+        </div>
+
+        {/* GLOBAL LEADERBOARD PREVIEW */}
+        <div className="w-full bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden max-w-xs min-h-[160px]">
+          <div className="bg-slate-800/80 p-2 border-b border-slate-700/50 flex justify-center items-center gap-2">
+            <Trophy size={14} className="text-yellow-500" />
+            <span className="text-xs font-bold text-slate-300 tracking-wider uppercase">
+              {isFirebaseConfigured ? "Global Leaderboard" : "Local Leaderboard"}
+            </span>
+          </div>
+          
+          {loadingLb ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="animate-spin text-slate-600" size={24} />
+            </div>
+          ) : (
+            <div className="p-2 space-y-1">
+              {topPlayers.map((player, idx) => (
+                <div key={idx} className="flex justify-between items-center text-xs p-1.5 rounded hover:bg-slate-700/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    {getRankIcon(idx)}
+                    <span className="font-bold text-slate-300 truncate max-w-[100px]">{player.name}</span>
+                  </div>
+                  <span className="font-mono font-bold text-emerald-400">
+                    ${Math.floor(player.totalProfit)}
+                  </span>
+                </div>
+              ))}
+              {topPlayers.length === 0 && (
+                 <div className="text-xs text-slate-500 text-center py-4">No scores yet</div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

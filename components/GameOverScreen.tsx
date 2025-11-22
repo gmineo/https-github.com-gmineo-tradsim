@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TradeResult, LeaderboardEntry, RankInfo, Achievement } from '../types';
 import { Button } from './Button';
-import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Shield, Zap, Target, Award, Crown, Footprints, Crosshair, Gem, Skull } from 'lucide-react';
-import { saveScore, getLeaderboard } from '../services/leaderboardService';
+import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2 } from 'lucide-react';
+import { saveScore, getCombinedLeaderboard, calculatePercentile } from '../services/leaderboardService';
 import { playerService } from '../services/playerService';
+import { isFirebaseConfigured } from '../services/firebase';
 
 interface GameOverScreenProps {
   history: TradeResult[];
@@ -23,6 +24,7 @@ const IconMap: Record<string, React.FC<any>> = {
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onRestart }) => {
   const [playerName, setPlayerName] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   
   // Progression State
@@ -31,6 +33,10 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
   const [isLevelUp, setIsLevelUp] = useState(false);
   const [careerProfit, setCareerProfit] = useState(0);
+  
+  // Percentile State
+  const [percentileStr, setPercentileStr] = useState("0");
+  const [globalRanking, setGlobalRanking] = useState(0); // Mock ranking number
 
   // Refs to prevent double processing in StrictMode
   const processedRef = useRef(false);
@@ -68,11 +74,8 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
     if (processedRef.current) return;
     processedRef.current = true;
 
-    setLeaderboard(getLeaderboard());
-
     // Update Player Profile
     const { newProfile, newAchievements: unlocked, leveledUp } = playerService.updateProfile(history, totalProfit, totalReturn);
-    
     const currentRank = playerService.getRank(newProfile.totalCareerProfit);
     
     setRank(currentRank);
@@ -80,12 +83,19 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
     setNewAchievements(unlocked);
     setIsLevelUp(leveledUp);
 
+    // Initial Leaderboard fetch (async)
+    getCombinedLeaderboard().then(data => setLeaderboard(data));
+    
+    // Calculate Percentile
+    const pStr = calculatePercentile(totalProfit);
+    setPercentileStr(pStr);
+    setGlobalRanking(Math.floor(10000 - (parseFloat(pStr) * 100)) + 1);
+
     // Calculate Progress Bar
     if (currentRank.nextThreshold) {
       const prevThreshold = currentRank.minProfit;
       const totalRange = currentRank.nextThreshold - prevThreshold;
       const progress = newProfile.totalCareerProfit - prevThreshold;
-      // Ensure percentage is between 0 and 100. If profit < minProfit (negative), 0.
       const pct = Math.max(0, Math.min(100, (progress / totalRange) * 100));
       setProgressPercent(pct);
     } else {
@@ -94,13 +104,20 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
 
   }, [history, totalProfit, totalReturn]);
 
-  const handleSubmitScore = (e: React.FormEvent) => {
+  const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!playerName.trim()) return;
     
-    const newLeaderboard = saveScore(playerName, totalProfit, totalReturn);
-    setLeaderboard(newLeaderboard);
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      const newLeaderboard = await saveScore(playerName, totalProfit, totalReturn);
+      setLeaderboard(newLeaderboard);
+      setIsSubmitted(true);
+    } catch (err) {
+      console.error("Failed to submit", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getRankIcon = (index: number) => {
@@ -112,14 +129,14 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
 
   // Sharing
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareText = `I just turned $500 into ${formatCurrency(totalProfit + 500)} in the Trading Simulator! 🚀\n\nProfit: ${formatCurrency(totalProfit)}\nReturn: ${formatPct(totalReturn/100)}\nRank: ${rank?.title}\n\nCan you beat my score?`;
+  const shareText = `I just outperformed ${percentileStr}% of players on Trading Simulator! 🚀\n\nProfit: ${formatCurrency(totalProfit)}\nRank: ${rank?.title}\n\nCan you beat my score?`;
+  
   const shareOnTwitter = () => {
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(url, '_blank');
   };
   const shareOnLinkedin = () => {
-    const linkedinText = `Just finished a session on Trading Simulator! 📉📈\n\nRank Achieved: ${rank?.title}\nSession Profit: ${formatCurrency(totalProfit)}\nTotal Return: ${formatPct(totalReturn/100)}\n\nChallenge your market instincts here: ${shareUrl}`;
-    const url = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(linkedinText)}`;
+    const url = `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(shareText + " " + shareUrl)}`;
     window.open(url, '_blank');
   };
 
@@ -132,6 +149,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           <Trophy size={40} className="mx-auto text-yellow-500 mb-2" />
           <h1 className="text-3xl font-black text-white mb-1">SESSION COMPLETE</h1>
           <p className="text-slate-400 text-xs uppercase tracking-wider">Market closed</p>
+        </div>
+
+        {/* GLOBAL COMPARISON BANNER */}
+        <div className="mb-6 bg-blue-200 text-blue-900 p-4 rounded-lg border-l-8 border-blue-600 shadow-lg animate-in slide-in-from-left duration-700">
+          <p className="font-serif text-lg leading-tight">
+            You outperformed <span className="font-bold">{percentileStr}%</span> of players, ranking <span className="font-bold">#{globalRanking}</span>. <span onClick={shareOnTwitter} className="text-blue-700 underline cursor-pointer hover:text-blue-900 font-bold">Tweet</span>
+          </p>
         </div>
 
         {/* 1. Main Score Card */}
@@ -218,7 +242,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
             <form onSubmit={handleSubmitScore} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <h3 className="text-slate-300 font-bold text-sm mb-3 flex items-center gap-2">
                 <User size={16} className="text-blue-400" />
-                Save to Daily Leaderboard
+                {isFirebaseConfigured ? "Post to Global Leaderboard" : "Save to Daily Leaderboard (Local)"}
               </h3>
               <div className="flex gap-2">
                 <input 
@@ -229,10 +253,15 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                   onChange={(e) => setPlayerName(e.target.value)}
                   className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 font-bold text-sm"
                 />
-                <Button type="submit" disabled={!playerName.trim()} className="px-4 py-2 text-sm">
-                  <Save size={18} />
+                <Button type="submit" disabled={!playerName.trim() || isSubmitting} className="px-4 py-2 text-sm">
+                  {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                 </Button>
               </div>
+              {isFirebaseConfigured && (
+                <p className="text-[10px] text-slate-500 mt-2 text-center">
+                  Connecting to Global Database...
+                </p>
+              )}
             </form>
           </div>
         ) : (
@@ -241,12 +270,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
               <div className="p-3 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
                  <h3 className="font-bold text-slate-200 text-sm flex items-center gap-2">
                    <Trophy size={14} className="text-yellow-500" />
-                   Top Traders
+                   {isFirebaseConfigured ? "Global Leaders" : "Top Traders (Local)"}
                  </h3>
               </div>
               <div className="max-h-40 overflow-y-auto custom-scrollbar">
                 {leaderboard.map((entry, idx) => {
-                   const isCurrentRun = entry.timestamp === leaderboard.find(e => e.name === playerName && e.totalProfit === totalProfit)?.timestamp;
+                   // Simple check for 'current run' highlighting using name and score match
+                   const isCurrentRun = entry.name === playerName && entry.totalProfit === totalProfit;
                    return (
                     <div 
                       key={idx} 
