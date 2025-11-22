@@ -1,7 +1,44 @@
 import { StockData, PricePoint } from '../types';
 
+interface SimplePoint {
+  timestamp: number;
+  price: number;
+}
+
+// Helper: Interpolate S&P 500 price for a specific timestamp
+// We use linear interpolation because SPX data is monthly but Stock data is daily.
+const getInterpolatedSPX = (timestamp: number, spxData: SimplePoint[]): number => {
+  if (spxData.length === 0) return 1000; // Fallback
+
+  // 1. Handle out of bounds
+  if (timestamp <= spxData[0].timestamp) return spxData[0].price;
+  if (timestamp >= spxData[spxData.length - 1].timestamp) return spxData[spxData.length - 1].price;
+
+  // 2. Find the surrounding points (Linear Scan is fine for this dataset size, Binary Search would be faster but overkill here)
+  for (let i = 0; i < spxData.length - 1; i++) {
+    const p1 = spxData[i];
+    const p2 = spxData[i + 1];
+
+    if (timestamp >= p1.timestamp && timestamp <= p2.timestamp) {
+      const totalDiff = p2.timestamp - p1.timestamp;
+      const timeDiff = timestamp - p1.timestamp;
+      const ratio = timeDiff / totalDiff;
+      
+      return p1.price + (ratio * (p2.price - p1.price));
+    }
+  }
+
+  return spxData[spxData.length - 1].price;
+};
+
 // Helper: Parse CSV text into StockData
-const parseCustomCSV = (csvText: string, name: string, ticker: string, uniqueId: string): StockData => {
+const parseCustomCSV = (
+  csvText: string, 
+  name: string, 
+  ticker: string, 
+  uniqueId: string,
+  spxData: SimplePoint[]
+): StockData => {
   // Handle different newline formats (CRLF, LF, CR)
   const lines = csvText.trim().split(/\r\n|\n|\r/);
   
@@ -45,20 +82,11 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string, uniqueId:
     limitedRows = parsedRows.slice(startTrim, startTrim + MAX_POINTS);
   }
 
-  // Generate fake S&P 500 comparison data
-  let currentSP500 = 2000;
-  
-  const finalData: PricePoint[] = limitedRows.map((row, idx) => {
-    if (idx > 0) {
-      const prevPrice = limitedRows[idx - 1].price;
-      const priceChange = (row.price - prevPrice) / prevPrice;
-      const marketMove = (priceChange * 0.6) + ((Math.random() - 0.5) * 0.005);
-      currentSP500 = currentSP500 * (1 + marketMove);
-    }
-
+  // Attach Real S&P 500 Data via Interpolation
+  const finalData: PricePoint[] = limitedRows.map((row) => {
     return {
       ...row,
-      sp500: currentSP500
+      sp500: getInterpolatedSPX(row.timestamp, spxData)
     };
   });
 
@@ -72,16 +100,57 @@ const parseCustomCSV = (csvText: string, name: string, ticker: string, uniqueId:
   };
 };
 
+// Helper: Parse the master SPX csv
+const parseSPXData = (csvText: string): SimplePoint[] => {
+  const lines = csvText.trim().split(/\r\n|\n|\r/);
+  const startIndex = lines[0]?.toLowerCase().includes('date') ? 1 : 0;
+  const points: SimplePoint[] = [];
+
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const parts = line.split(',');
+    if (parts.length < 2) continue;
+    
+    const dateStr = parts[0].trim();
+    const priceVal = parseFloat(parts[1].trim());
+    
+    if (!isNaN(priceVal)) {
+      points.push({
+        timestamp: new Date(dateStr).getTime(),
+        price: priceVal
+      });
+    }
+  }
+  // Important: Sort Ascending for interpolation logic
+  return points.sort((a, b) => a.timestamp - b.timestamp);
+};
+
 // Defines the pool of available files on the server
 const DATASET_POOL = [
   { url: 'coke.csv', name: 'Coca-Cola', ticker: 'KO' },
   { url: 'btc.csv', name: 'Bitcoin', ticker: 'BTC' },
-  { url: 'aapl.csv', name: 'Apple', ticker: 'AAPL' }
+  { url: 'aapl.csv', name: 'Apple', ticker: 'AAPL' },
+  { url: 'tsla.csv', name: 'Tesla', ticker: 'TSLA' }
 ];
 
 export const loadGameData = async (numberOfRounds: number = 3): Promise<StockData[]> => {
   try {
-    // Select random datasets for the requested number of rounds
+    // 1. Fetch S&P 500 Data FIRST (Real Data)
+    let spxData: SimplePoint[] = [];
+    try {
+      const spxRes = await fetch('spx.csv');
+      if (spxRes.ok) {
+        const spxText = await spxRes.text();
+        spxData = parseSPXData(spxText);
+      } else {
+        console.warn("spx.csv not found, falling back to flat line");
+      }
+    } catch (e) {
+      console.error("Failed to load SPX data", e);
+    }
+
+    // 2. Select random datasets for the requested number of rounds
     const selection = [];
     for (let i = 0; i < numberOfRounds; i++) {
       const randomDataset = DATASET_POOL[Math.floor(Math.random() * DATASET_POOL.length)];
@@ -92,12 +161,13 @@ export const loadGameData = async (numberOfRounds: number = 3): Promise<StockDat
       });
     }
 
+    // 3. Fetch and parse stock data, injecting the SPX reference
     const promises = selection.map(async (ds) => {
       try {
         const response = await fetch(ds.url);
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
         const text = await response.text();
-        return parseCustomCSV(text, ds.name, ds.ticker, ds.uniqueId);
+        return parseCustomCSV(text, ds.name, ds.ticker, ds.uniqueId, spxData);
       } catch (err) {
         console.error(`Failed to load ${ds.url}:`, err);
         return null;

@@ -186,7 +186,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                   <div className="flex flex-col text-center w-1/3 border-l border-slate-700/50 border-r px-2">
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Market</div>
                      <div className={`text-xs font-bold ${trade.stockReturnPercent >= 0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                        {formatPct(trade.stockReturnPercent)}
+                        {formatPct(trade.stockReturnPercent / 100)}
                      </div>
                   </div>
 
@@ -195,7 +195,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">You</div>
                      <div className={`font-mono font-black text-sm flex items-center justify-end gap-1 ${trade.userReturnPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {trade.userReturnPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                        {formatPct(trade.userReturnPercent)}
+                        {formatPct(trade.userReturnPercent / 100)}
                      </div>
                   </div>
                </div>
