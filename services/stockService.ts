@@ -46,7 +46,7 @@ const parseCustomCSV = (
   const startIndex = lines[0]?.toLowerCase().includes('date') ? 1 : 0;
 
   // Parse rows
-  const parsedRows = [];
+  let parsedRows = [];
 
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -69,6 +69,16 @@ const parseCustomCSV = (
 
   // Sort by date ascending (Oldest -> Newest)
   parsedRows.sort((a, b) => a.timestamp - b.timestamp);
+
+  // SMOOTHING: Apply a 3-point Moving Average to reduce jaggedness and make the game more playable
+  if (parsedRows.length > 3) {
+    parsedRows = parsedRows.map((row, i, arr) => {
+      if (i < 2) return row; // Skip first 2 points
+      // Calculate average of current + previous 2 points
+      const smoothedPrice = (row.price + arr[i - 1].price + arr[i - 2].price) / 3;
+      return { ...row, price: smoothedPrice };
+    });
+  }
 
   // OPTIMIZATION: Limit to ~450 data points (approx 36s gameplay)
   const MAX_POINTS = 450;

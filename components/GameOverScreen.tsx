@@ -43,20 +43,25 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
 
   // Calculate totals
   const totalProfit = history.reduce((acc, curr) => acc + (curr.finalCapital - curr.initialCapital), 0);
-  const totalReturn = (totalProfit / 500) * 100;
   
-  const bestTrade = Math.max(...history.map(h => h.bestTradePct).filter(n => n !== -Infinity));
-  const totalTrades = history.reduce((acc, curr) => acc + curr.tradeCount, 0);
-  const totalWins = history.reduce((acc, curr) => acc + curr.winningTrades, 0);
-  const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
-
+  // --- CHANGED: Main Metrics are now Averages ---
   const averageUserReturn = history.length > 0
     ? history.reduce((acc, curr) => acc + curr.userReturnPercent, 0) / history.length
+    : 0;
+
+  const averageStockReturn = history.length > 0
+    ? history.reduce((acc, curr) => acc + curr.stockReturnPercent, 0) / history.length
     : 0;
 
   const averageSP500Return = history.length > 0 
     ? history.reduce((acc, curr) => acc + curr.sp500ReturnPercent, 0) / history.length 
     : 0;
+  // ----------------------------------------------
+  
+  const bestTrade = Math.max(...history.map(h => h.bestTradePct).filter(n => n !== -Infinity));
+  const totalTrades = history.reduce((acc, curr) => acc + curr.tradeCount, 0);
+  const totalWins = history.reduce((acc, curr) => acc + curr.winningTrades, 0);
+  const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
 
   const formatCurrency = (val: number) => {
     const sign = val >= 0 ? '+' : '';
@@ -66,16 +71,20 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   const formatPct = (val: number) => {
     if (val === -Infinity || val === Infinity) return '0.0%';
     const sign = val >= 0 ? '+' : '';
-    return `${sign}${(val * 100).toFixed(1)}%`;
+    return `${sign}${(val).toFixed(1)}%`; // Removed *100 here if values are already passed as percentages, assuming inputs are like 10.5 for 10.5%
   };
 
+  // Specific formatter for the raw decimal values if needed, or re-use formatPct if inputs are %
+  // Based on previous code, userReturnPercent in TradeResult was calculated as * 100. 
+  // So 50% is stored as 50.
+  
   // Process Game Result & Progression ONCE
   useEffect(() => {
     if (processedRef.current) return;
     processedRef.current = true;
 
     // Update Player Profile
-    const { newProfile, newAchievements: unlocked, leveledUp } = playerService.updateProfile(history, totalProfit, totalReturn);
+    const { newProfile, newAchievements: unlocked, leveledUp } = playerService.updateProfile(history, totalProfit, averageUserReturn);
     const currentRank = playerService.getRank(newProfile.totalCareerProfit);
     
     setRank(currentRank);
@@ -102,7 +111,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
       setProgressPercent(100); // Max rank
     }
 
-  }, [history, totalProfit, totalReturn]);
+  }, [history, totalProfit, averageUserReturn]);
 
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +119,8 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
     
     setIsSubmitting(true);
     try {
-      const newLeaderboard = await saveScore(playerName, totalProfit, totalReturn);
+      // Still saving totalProfit for leaderboard ranking purposes, but passing average return for display if needed
+      const newLeaderboard = await saveScore(playerName, totalProfit, averageUserReturn);
       setLeaderboard(newLeaderboard);
       setIsSubmitted(true);
     } catch (err) {
@@ -129,7 +139,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
 
   // Sharing
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareText = `I just outperformed ${percentileStr}% of players on Trading Simulator! 🚀\n\nProfit: ${formatCurrency(totalProfit)}\nRank: ${rank?.title}\n\nCan you beat my score?`;
+  const shareText = `I just achieved a ${formatPct(averageUserReturn)} average return on Trading Simulator! 🚀\n\nRank: ${rank?.title}\n\nCan you beat my score?`;
   
   const shareOnTwitter = () => {
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
@@ -148,7 +158,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
         <div className="text-center mt-2 mb-6">
           <Trophy size={40} className="mx-auto text-yellow-500 mb-2" />
           <h1 className="text-3xl font-black text-white mb-1">SESSION COMPLETE</h1>
-          <p className="text-slate-400 text-xs uppercase tracking-wider">Market closed</p>
+          <p className="text-slate-400 text-xs uppercase tracking-wider">Performance Summary</p>
         </div>
 
         {/* GLOBAL COMPARISON BANNER */}
@@ -158,14 +168,20 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </p>
         </div>
 
-        {/* 1. Main Score Card */}
+        {/* 1. Main Score Card (UPDATED to show Average Return %) */}
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 text-center mb-6 shadow-2xl">
-          <span className="text-slate-400 text-xs font-bold uppercase block mb-1">Session Profit</span>
-          <div className={`text-4xl font-black mb-1 ${totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {formatCurrency(totalProfit)}
+          <span className="text-slate-400 text-xs font-bold uppercase block mb-2">Average Session Return</span>
+          
+          <div className={`text-5xl font-black mb-4 ${averageUserReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {formatPct(averageUserReturn)}
           </div>
-          <div className={`text-sm font-mono font-bold ${totalReturn >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-            {formatPct(totalReturn / 100)} Return
+          
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <p className="text-slate-300 font-serif text-sm leading-relaxed">
+              Your returns were <span className={averageUserReturn >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>{averageUserReturn.toFixed(1)}%</span>, 
+              against the stock's <span className="text-white font-bold">{averageStockReturn.toFixed(1)}%</span> and 
+              the S&P's <span className="text-blue-400 font-bold">{averageSP500Return.toFixed(1)}%</span>.
+            </p>
           </div>
         </div>
 
@@ -186,7 +202,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                   <div className="flex flex-col text-center w-1/3 border-l border-slate-700/50 border-r px-2">
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Market</div>
                      <div className={`text-xs font-bold ${trade.stockReturnPercent >= 0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                        {formatPct(trade.stockReturnPercent / 100)}
+                        {formatPct(trade.stockReturnPercent)}
                      </div>
                   </div>
 
@@ -195,7 +211,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">You</div>
                      <div className={`font-mono font-black text-sm flex items-center justify-end gap-1 ${trade.userReturnPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {trade.userReturnPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                        {formatPct(trade.userReturnPercent / 100)}
+                        {formatPct(trade.userReturnPercent)}
                      </div>
                   </div>
                </div>
@@ -335,23 +351,11 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
         <div className="grid grid-cols-2 gap-3 mb-6 max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Best Trade</span>
-            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade)}</span>
+            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade * 100)}</span>
           </div>
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Accuracy</span>
             <span className="text-sm font-bold text-blue-400">{winRate.toFixed(0)}%</span>
-          </div>
-          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
-            <span className="text-[9px] text-slate-500 uppercase font-bold block">Avg User Return</span>
-            <span className={`text-sm font-bold ${averageUserReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {formatPct(averageUserReturn / 100)}
-            </span>
-          </div>
-          <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
-            <span className="text-[9px] text-slate-500 uppercase font-bold block">Avg S&P 500</span>
-            <span className={`text-sm font-bold ${averageSP500Return >= 0 ? 'text-slate-300' : 'text-red-400'}`}>
-              {formatPct(averageSP500Return / 100)}
-            </span>
           </div>
         </div>
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AreaChart, Area, YAxis, XAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { StockData } from '../types';
@@ -330,10 +329,10 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
             />
             
             <Area 
-              type="monotone" 
+              type="natural" 
               dataKey="displayPrice" 
               stroke="#3B82F6" 
-              strokeWidth={3}
+              strokeWidth={4}
               fill="url(#colorPrice)" 
               isAnimationActive={false} 
               connectNulls={false}
@@ -348,7 +347,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
                   { x: trade.end.date, y: trade.end.price }
                 ]}
                 stroke={trade.pnlPercent >= 0 ? "#10b981" : "#ef4444"}
-                strokeWidth={3}
+                strokeWidth={4}
               />
             ))}
 
@@ -360,7 +359,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
                   { x: stock.data[currentIndex].date, y: stock.data[currentIndex].price }
                 ]}
                 stroke={unrealizedPnL >= 0 ? "#10b981" : "#ef4444"}
-                strokeWidth={3}
+                strokeWidth={4}
               />
             )}
           </AreaChart>
