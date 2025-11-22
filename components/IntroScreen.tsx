@@ -5,7 +5,6 @@ import { Activity, Loader2, Trophy, Medal, Sliders } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { getCombinedLeaderboard } from '../services/leaderboardService';
 import { LeaderboardEntry } from '../types';
-import { isFirebaseConfigured } from '../services/firebase';
 
 interface IntroScreenProps {
   onStart: (rounds: number) => void;
@@ -104,7 +103,7 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
           <div className="bg-slate-800/80 p-2 border-b border-slate-700/50 flex justify-center items-center gap-2">
             <Trophy size={14} className="text-yellow-500" />
             <span className="text-xs font-bold text-slate-300 tracking-wider uppercase">
-              {isFirebaseConfigured ? "Global Leaderboard" : "Local Leaderboard"}
+              Global Leaderboard
             </span>
           </div>
           

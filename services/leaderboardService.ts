@@ -1,27 +1,23 @@
 
 import { LeaderboardEntry } from '../types';
-import { db, isFirebaseConfigured } from './firebase';
-import { collection, addDoc, getDocs, query, orderBy, limit } from "firebase/firestore";
 
 const STORAGE_KEY = 'trading_simulator_leaderboard';
+const API_URL = '/.netlify/functions/leaderboard';
 
-// --- MOCK GLOBAL DATA (Fallback) ---
+// --- MOCK BOTS (Fallback if offline) ---
 const GLOBAL_BOTS: LeaderboardEntry[] = [
   { name: "Warren B.", totalProfit: 5200, totalReturn: 1040, date: "10/12/2023", timestamp: 1 },
   { name: "Nancy P.", totalProfit: 3800, totalReturn: 760, date: "11/05/2023", timestamp: 2 },
   { name: "WallStBetz", totalProfit: 2100, totalReturn: 420, date: "Today", timestamp: 3 },
-  { name: "CryptoKing", totalProfit: 1500, totalReturn: 300, date: "Yesterday", timestamp: 4 },
-  { name: "HODL_GANG", totalProfit: 950, totalReturn: 190, date: "Today", timestamp: 5 },
 ];
 
-// --- LOCAL STORAGE HELPERS (Fallback) ---
+// --- LOCAL STORAGE HELPERS (Backup) ---
 const getLocalLeaderboard = (): LeaderboardEntry[] => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return [];
     return JSON.parse(stored);
   } catch (e) {
-    console.error("Failed to parse local leaderboard", e);
     return [];
   }
 };
@@ -35,37 +31,24 @@ const saveLocalScore = (entry: LeaderboardEntry): LeaderboardEntry[] => {
 
 // --- PUBLIC API ---
 
-/**
- * Fetches the leaderboard. 
- * If Firebase is configured, fetches real global data.
- * If not, returns Local Storage + Bots.
- */
 export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-  // 1. Try Firebase
-  if (isFirebaseConfigured && db) {
-    try {
-      const q = query(collection(db, "leaderboard"), orderBy("totalProfit", "desc"), limit(10));
-      const querySnapshot = await getDocs(q);
-      const firebaseData: LeaderboardEntry[] = [];
-      querySnapshot.forEach((doc) => {
-        firebaseData.push(doc.data() as LeaderboardEntry);
-      });
-      
-      if (firebaseData.length > 0) {
-        return firebaseData;
+  // 1. Try Netlify Function (Neon Database)
+  try {
+    const response = await fetch(API_URL);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
       }
-    } catch (e) {
-      console.error("Error fetching from Firebase:", e);
-      // Fall through to local
     }
+  } catch (e) {
+    console.warn("Offline or API not configured, using local data");
   }
 
-  // 2. Fallback to Local + Bots
+  // 2. Fallback to Local + Bots if API fails
   const localScores = getLocalLeaderboard();
   const combined = [...GLOBAL_BOTS, ...localScores];
-  
-  // Sort by Profit Descending and take top 5
-  return combined.sort((a, b) => b.totalProfit - a.totalProfit).slice(0, 5);
+  return combined.sort((a, b) => b.totalProfit - a.totalProfit).slice(0, 10);
 };
 
 export const saveScore = async (name: string, totalProfit: number, totalReturn: number): Promise<LeaderboardEntry[]> => {
@@ -77,27 +60,28 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
     timestamp: Date.now(),
   };
 
-  // 1. Always save locally so the user sees their own score immediately even if offline
+  // 1. Always save locally as backup
   const localResult = saveLocalScore(newEntry);
 
-  // 2. Try saving to Firebase
-  if (isFirebaseConfigured && db) {
-    try {
-      await addDoc(collection(db, "leaderboard"), newEntry);
-      // Fetch fresh data to return the true global state
-      return await getCombinedLeaderboard();
-    } catch (e) {
-      console.error("Error saving to Firebase:", e);
+  // 2. Try saving to Netlify Function (Neon)
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEntry)
+    });
+
+    if (response.ok) {
+      const freshLeaderboard = await response.json();
+      return freshLeaderboard;
     }
+  } catch (e) {
+    console.error("Failed to save to cloud:", e);
   }
 
   return localResult;
 };
 
-/**
- * Calculates the player's percentile based on a simulated normal distribution.
- * This remains statistical rather than database-driven to avoid heavy queries.
- */
 export const calculatePercentile = (profit: number): string => {
   const mean = 200; 
   const stdDev = 800; 

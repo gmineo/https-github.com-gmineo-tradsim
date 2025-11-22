@@ -5,7 +5,6 @@ import { Button } from './Button';
 import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { saveScore, getCombinedLeaderboard, calculatePercentile } from '../services/leaderboardService';
 import { playerService } from '../services/playerService';
-import { isFirebaseConfigured } from '../services/firebase';
 
 interface GameOverScreenProps {
   history: TradeResult[];
@@ -36,7 +35,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   
   // Percentile State
   const [percentileStr, setPercentileStr] = useState("0");
-  const [globalRanking, setGlobalRanking] = useState(0); // Mock ranking number
+  const [globalRanking, setGlobalRanking] = useState(0); 
 
   // Refs to prevent double processing in StrictMode
   const processedRef = useRef(false);
@@ -44,7 +43,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   // Calculate totals
   const totalProfit = history.reduce((acc, curr) => acc + (curr.finalCapital - curr.initialCapital), 0);
   
-  // --- CHANGED: Main Metrics are now Averages ---
   const averageUserReturn = history.length > 0
     ? history.reduce((acc, curr) => acc + curr.userReturnPercent, 0) / history.length
     : 0;
@@ -56,7 +54,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   const averageSP500Return = history.length > 0 
     ? history.reduce((acc, curr) => acc + curr.sp500ReturnPercent, 0) / history.length 
     : 0;
-  // ----------------------------------------------
   
   const bestTrade = Math.max(...history.map(h => h.bestTradePct).filter(n => n !== -Infinity));
   const totalTrades = history.reduce((acc, curr) => acc + curr.tradeCount, 0);
@@ -71,12 +68,8 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   const formatPct = (val: number) => {
     if (val === -Infinity || val === Infinity) return '0.0%';
     const sign = val >= 0 ? '+' : '';
-    return `${sign}${(val).toFixed(1)}%`; // Removed *100 here if values are already passed as percentages, assuming inputs are like 10.5 for 10.5%
+    return `${sign}${(val).toFixed(1)}%`; 
   };
-
-  // Specific formatter for the raw decimal values if needed, or re-use formatPct if inputs are %
-  // Based on previous code, userReturnPercent in TradeResult was calculated as * 100. 
-  // So 50% is stored as 50.
   
   // Process Game Result & Progression ONCE
   useEffect(() => {
@@ -119,7 +112,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
     
     setIsSubmitting(true);
     try {
-      // Still saving totalProfit for leaderboard ranking purposes, but passing average return for display if needed
       const newLeaderboard = await saveScore(playerName, totalProfit, averageUserReturn);
       setLeaderboard(newLeaderboard);
       setIsSubmitted(true);
@@ -168,7 +160,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </p>
         </div>
 
-        {/* 1. Main Score Card (UPDATED to show Average Return %) */}
+        {/* 1. Main Score Card */}
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 text-center mb-6 shadow-2xl">
           <span className="text-slate-400 text-xs font-bold uppercase block mb-2">Average Session Return</span>
           
@@ -185,7 +177,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           </div>
         </div>
 
-        {/* 2. INDIVIDUAL STOCK BREAKDOWN (NEW) */}
+        {/* 2. INDIVIDUAL STOCK BREAKDOWN */}
         <div className="mb-8">
            <h3 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 text-center">Trade Breakdown</h3>
            <div className="space-y-3">
@@ -219,7 +211,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
            </div>
         </div>
 
-        {/* 3. Progression Section (Gamification) */}
+        {/* 3. Progression Section */}
         {rank && (
           <div className="mb-8 relative overflow-hidden bg-slate-800 border border-slate-700 rounded-xl p-5">
             {/* Level Up Overlay Effect */}
@@ -292,7 +284,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
             <form onSubmit={handleSubmitScore} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
               <h3 className="text-slate-300 font-bold text-sm mb-3 flex items-center gap-2">
                 <User size={16} className="text-blue-400" />
-                {isFirebaseConfigured ? "Post to Global Leaderboard" : "Save to Daily Leaderboard (Local)"}
+                Post to Global Leaderboard
               </h3>
               <div className="flex gap-2">
                 <input 
@@ -307,11 +299,9 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                   {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                 </Button>
               </div>
-              {isFirebaseConfigured && (
-                <p className="text-[10px] text-slate-500 mt-2 text-center">
-                  Connecting to Global Database...
-                </p>
-              )}
+              <p className="text-[10px] text-slate-500 mt-2 text-center">
+                  Requires internet connection
+              </p>
             </form>
           </div>
         ) : (
@@ -320,7 +310,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
               <div className="p-3 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
                  <h3 className="font-bold text-slate-200 text-sm flex items-center gap-2">
                    <Trophy size={14} className="text-yellow-500" />
-                   {isFirebaseConfigured ? "Global Leaders" : "Top Traders (Local)"}
+                   Global Leaders
                  </h3>
               </div>
               <div className="max-h-40 overflow-y-auto custom-scrollbar">
@@ -351,7 +341,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
         <div className="grid grid-cols-2 gap-3 mb-6 max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Best Trade</span>
-            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade * 100)}</span>
+            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade)}</span>
           </div>
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Accuracy</span>
