@@ -4,12 +4,8 @@ import { LeaderboardEntry } from '../types';
 const STORAGE_KEY = 'trading_simulator_leaderboard';
 const API_URL = '/.netlify/functions/leaderboard';
 
-// --- MOCK BOTS (Fallback if offline) ---
-const GLOBAL_BOTS: LeaderboardEntry[] = [
-  { name: "Warren B.", totalProfit: 5200, totalReturn: 1040, date: "10/12/2023", timestamp: 1 },
-  { name: "Nancy P.", totalProfit: 3800, totalReturn: 760, date: "11/05/2023", timestamp: 2 },
-  { name: "WallStBetz", totalProfit: 2100, totalReturn: 420, date: "Today", timestamp: 3 },
-];
+// --- MOCK BOTS (Removed as per request) ---
+const GLOBAL_BOTS: LeaderboardEntry[] = [];
 
 // --- LOCAL STORAGE HELPERS (Backup) ---
 const getLocalLeaderboard = (): LeaderboardEntry[] => {
@@ -24,7 +20,7 @@ const getLocalLeaderboard = (): LeaderboardEntry[] => {
 
 const saveLocalScore = (entry: LeaderboardEntry): LeaderboardEntry[] => {
   const current = getLocalLeaderboard();
-  const updated = [...current, entry].sort((a, b) => b.totalProfit - a.totalProfit).slice(0, 50);
+  const updated = [...current, entry].sort((a, b) => b.totalReturn - a.totalReturn).slice(0, 50);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   return updated;
 };
@@ -37,7 +33,7 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     const response = await fetch(API_URL);
     if (response.ok) {
       const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         return data;
       }
     }
@@ -45,10 +41,10 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     console.warn("Offline or API not configured, using local data");
   }
 
-  // 2. Fallback to Local + Bots if API fails
+  // 2. Fallback to Local if API fails
   const localScores = getLocalLeaderboard();
-  const combined = [...GLOBAL_BOTS, ...localScores];
-  return combined.sort((a, b) => b.totalProfit - a.totalProfit).slice(0, 10);
+  // Sort by Return % (descending)
+  return localScores.sort((a, b) => b.totalReturn - a.totalReturn).slice(0, 10);
 };
 
 export const saveScore = async (name: string, totalProfit: number, totalReturn: number): Promise<LeaderboardEntry[]> => {
@@ -83,9 +79,11 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
 };
 
 export const calculatePercentile = (profit: number): string => {
-  const mean = 200; 
-  const stdDev = 800; 
-  const z = (profit - mean) / stdDev;
+  // Adjusted for Return % rather than just raw profit to make it more realistic for a "return" based game
+  // Using arbitrary distribution for game feel
+  const mean = 5; 
+  const stdDev = 15; 
+  const z = (profit - mean) / stdDev; // Note: using profit var name but logic applies to general score
 
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp(-z * z / 2);
