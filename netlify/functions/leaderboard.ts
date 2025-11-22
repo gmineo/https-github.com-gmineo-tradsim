@@ -16,19 +16,24 @@ export const handler = async (event: any, context: any) => {
     return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
+  if (!process.env.DATABASE_URL) {
+    console.error("Missing DATABASE_URL environment variable");
+    return { statusCode: 500, body: JSON.stringify({ error: "Server configuration error: Database URL missing" }) };
+  }
+
   // Connect to Neon Database
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Required for Neon/AWS usage usually
+    ssl: { rejectUnauthorized: false } // Required for Neon/AWS usage
   });
 
   try {
     await client.connect();
 
     if (event.httpMethod === 'GET') {
-      // Fetch Top 10 sorted by Profit
+      // Fetch Top 10 sorted by Return % (descending) matches the new game logic
       const result = await client.query(
-        'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_profit DESC LIMIT 10'
+        'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 10'
       );
       
       // Parse numeric fields from Postgres (they come as strings)
@@ -50,15 +55,20 @@ export const handler = async (event: any, context: any) => {
       
       const data = JSON.parse(event.body) as LeaderboardEntry;
       
+      // Sanitize numbers to prevent SQL errors with NaN or Infinity
+      const safeProfit = isFinite(data.totalProfit) ? data.totalProfit : 0;
+      const safeReturn = isFinite(data.totalReturn) ? data.totalReturn : 0;
+      const safeName = (data.name || 'Anonymous').slice(0, 50); // Limit name length
+
       // Insert new score
       await client.query(
         'INSERT INTO leaderboard (name, total_profit, total_return, date, timestamp) VALUES ($1, $2, $3, $4, $5)',
-        [data.name, data.totalProfit, data.totalReturn, data.date, data.timestamp]
+        [safeName, safeProfit, safeReturn, data.date, data.timestamp]
       );
 
-      // Return the updated top 10 immediately
+      // Return the updated top 10 immediately, sorted by Return %
       const result = await client.query(
-        'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_profit DESC LIMIT 10'
+        'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 10'
       );
       
       const cleaned = result.rows.map((row: any) => ({

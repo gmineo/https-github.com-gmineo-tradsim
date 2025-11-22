@@ -4,9 +4,6 @@ import { LeaderboardEntry } from '../types';
 const STORAGE_KEY = 'trading_simulator_leaderboard';
 const API_URL = '/.netlify/functions/leaderboard';
 
-// --- MOCK BOTS (Removed as per request) ---
-const GLOBAL_BOTS: LeaderboardEntry[] = [];
-
 // --- LOCAL STORAGE HELPERS (Backup) ---
 const getLocalLeaderboard = (): LeaderboardEntry[] => {
   try {
@@ -36,6 +33,8 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
       if (Array.isArray(data)) {
         return data;
       }
+    } else {
+      console.warn(`API Error ${response.status}:`, await response.text());
     }
   } catch (e) {
     console.warn("Offline or API not configured, using local data");
@@ -70,9 +69,12 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
     if (response.ok) {
       const freshLeaderboard = await response.json();
       return freshLeaderboard;
+    } else {
+      console.error("Failed to save to cloud. Status:", response.status);
+      console.error("Response:", await response.text());
     }
   } catch (e) {
-    console.error("Failed to save to cloud:", e);
+    console.error("Network error while saving:", e);
   }
 
   return localResult;
