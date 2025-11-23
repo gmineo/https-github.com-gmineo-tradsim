@@ -47,13 +47,19 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
 };
 
 export const saveScore = async (name: string, totalProfit: number, totalReturn: number): Promise<LeaderboardEntry[]> => {
+  // Ensure we don't send NaNs or Infinities which crash the DB
+  const safeProfit = Number.isFinite(totalProfit) ? totalProfit : 0;
+  const safeReturn = Number.isFinite(totalReturn) ? totalReturn : 0;
+  
   const newEntry: LeaderboardEntry = {
     name: name.trim() || 'Anonymous Trader',
-    totalProfit,
-    totalReturn,
+    totalProfit: safeProfit,
+    totalReturn: safeReturn,
     date: new Date().toLocaleDateString(),
     timestamp: Date.now(),
   };
+
+  console.log("Saving score:", newEntry);
 
   // 1. Always save locally as backup
   const localResult = saveLocalScore(newEntry);
@@ -68,10 +74,11 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
 
     if (response.ok) {
       const freshLeaderboard = await response.json();
+      console.log("Cloud save successful", freshLeaderboard);
       return freshLeaderboard;
     } else {
-      console.error("Failed to save to cloud. Status:", response.status);
-      console.error("Response:", await response.text());
+      const errorText = await response.text();
+      console.error("Failed to save to cloud. Status:", response.status, "Error:", errorText);
     }
   } catch (e) {
     console.error("Network error while saving:", e);
