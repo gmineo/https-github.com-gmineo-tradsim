@@ -11,7 +11,7 @@ interface LeaderboardEntry {
 }
 
 export const handler = async (event: any, context: any) => {
-  // Headers to allow CORS (Cross-Origin Resource Sharing) if needed
+  // Headers to allow CORS (Cross-Origin Resource Sharing)
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -33,11 +33,11 @@ export const handler = async (event: any, context: any) => {
     return { 
       statusCode: 500, 
       headers,
-      body: JSON.stringify({ error: "Server configuration error: Database URL missing" }) 
+      body: JSON.stringify({ error: "Server configuration error: Database URL missing. Go to Netlify Site Settings > Environment Variables." }) 
     };
   }
 
-  console.log(`Attempting to connect to database... Method: ${event.httpMethod}`);
+  console.log(`[${event.httpMethod}] Connecting to database...`);
 
   // Connect to Neon Database
   const client = new Client({
@@ -48,13 +48,31 @@ export const handler = async (event: any, context: any) => {
 
   try {
     await client.connect();
-    console.log("Database connected successfully.");
+    console.log("Database connected.");
+
+    // --- AUTO-INITIALIZATION ---
+    // Create the table automatically if it doesn't exist.
+    // This prevents "relation does not exist" errors for new setups.
+    const createTableQuery = `
+      CREATE TABLE IF NOT EXISTS leaderboard (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(50) NOT NULL,
+        total_profit NUMERIC,
+        total_return NUMERIC,
+        date VARCHAR(20),
+        timestamp BIGINT
+      );
+    `;
+    await client.query(createTableQuery);
+    // ---------------------------
 
     if (event.httpMethod === 'GET') {
+      // Fetch top 50
       const result = await client.query(
         'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 50'
       );
       
+      // Map numeric strings back to numbers if necessary (pg returns numerics as strings)
       const cleaned = result.rows.map((row: any) => ({
         ...row,
         totalProfit: parseFloat(row.totalProfit),
@@ -71,37 +89,32 @@ export const handler = async (event: any, context: any) => {
 
     if (event.httpMethod === 'POST') {
       if (!event.body) {
-        console.error("POST request received but body is empty.");
         return { statusCode: 400, headers, body: 'Missing body' };
       }
       
-      console.log("Parsing body:", event.body);
       let data: LeaderboardEntry;
-      
       try {
         data = JSON.parse(event.body);
       } catch (e) {
-        console.error("JSON Parse Error:", e);
         return { statusCode: 400, headers, body: 'Invalid JSON' };
       }
       
       // Sanitize inputs
-      const safeProfit = isFinite(data.totalProfit) ? data.totalProfit : 0;
-      const safeReturn = isFinite(data.totalReturn) ? data.totalReturn : 0;
-      const safeName = (data.name || 'Anonymous').slice(0, 50);
+      // Ensure we don't insert NaN or Infinity which crashes SQL
+      const safeProfit = Number.isFinite(data.totalProfit) ? data.totalProfit : 0;
+      const safeReturn = Number.isFinite(data.totalReturn) ? data.totalReturn : 0;
+      const safeName = (data.name || 'Anonymous').slice(0, 50); // Limit name length
       const safeDate = data.date || new Date().toLocaleDateString();
       const safeTimestamp = data.timestamp || Date.now();
 
-      console.log(`Inserting: ${safeName}, Return: ${safeReturn}%`);
+      console.log(`Inserting score for ${safeName}: ${safeReturn}%`);
 
       await client.query(
         'INSERT INTO leaderboard (name, total_profit, total_return, date, timestamp) VALUES ($1, $2, $3, $4, $5)',
         [safeName, safeProfit, safeReturn, safeDate, safeTimestamp]
       );
 
-      console.log("Insert successful. Fetching updated list...");
-
-      // Return the updated top 10
+      // Return the updated top 10 immediately
       const result = await client.query(
         'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 10'
       );
@@ -121,14 +134,13 @@ export const handler = async (event: any, context: any) => {
     }
 
   } catch (error: any) {
-    console.error('DATABASE ERROR DETAILED:', error);
+    console.error('DATABASE ERROR:', error);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ error: 'Database operation failed', details: error.message }),
     };
   } finally {
-    console.log("Closing DB connection.");
     await client.end();
   }
 };
