@@ -11,48 +11,46 @@ interface LeaderboardEntry {
 }
 
 export const handler = async (event: any, context: any) => {
-  // Headers to allow CORS (Cross-Origin Resource Sharing)
+  context.callbackWaitsForEmptyEventLoop = false;
+
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   };
 
-  // Handle pre-flight requests
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: 'ok' };
   }
 
-  // Only allow GET (fetch) and POST (save)
   if (event.httpMethod !== 'GET' && event.httpMethod !== 'POST') {
     return { statusCode: 405, headers, body: 'Method Not Allowed' };
   }
 
   if (!process.env.DATABASE_URL) {
-    console.error("CRITICAL ERROR: DATABASE_URL environment variable is missing in Netlify.");
+    console.error("CRITICAL: DATABASE_URL is missing from environment variables.");
     return { 
       statusCode: 500, 
       headers,
-      body: JSON.stringify({ error: "Server configuration error: Database URL missing. Go to Netlify Site Settings > Environment Variables." }) 
+      body: JSON.stringify({ error: "Server configuration error: Database URL missing." }) 
     };
   }
 
-  console.log(`[${event.httpMethod}] Connecting to database...`);
-
-  // Connect to Neon Database
+  // Ensure SSL is used. Neon requires SSL.
+  const connectionString = process.env.DATABASE_URL;
+  
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }, // Required for Neon
-    connectionTimeoutMillis: 5000 // Fail fast if connection hangs
+    connectionString,
+    ssl: { rejectUnauthorized: false }, // Necessary for many hosted Postgres instances including Neon
+    connectionTimeoutMillis: 5000
   });
 
   try {
+    console.log(`[${event.httpMethod}] Attempting DB connection...`);
     await client.connect();
-    console.log("Database connected.");
+    console.log("DB Connected successfully.");
 
-    // --- AUTO-INITIALIZATION ---
-    // Create the table automatically if it doesn't exist.
-    // This prevents "relation does not exist" errors for new setups.
+    // Auto-create table if not exists (Safety check)
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS leaderboard (
         id SERIAL PRIMARY KEY,
@@ -64,15 +62,12 @@ export const handler = async (event: any, context: any) => {
       );
     `;
     await client.query(createTableQuery);
-    // ---------------------------
 
     if (event.httpMethod === 'GET') {
-      // Fetch top 50
       const result = await client.query(
         'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 50'
       );
       
-      // Map numeric strings back to numbers if necessary (pg returns numerics as strings)
       const cleaned = result.rows.map((row: any) => ({
         ...row,
         totalProfit: parseFloat(row.totalProfit),
@@ -88,9 +83,7 @@ export const handler = async (event: any, context: any) => {
     }
 
     if (event.httpMethod === 'POST') {
-      if (!event.body) {
-        return { statusCode: 400, headers, body: 'Missing body' };
-      }
+      if (!event.body) return { statusCode: 400, headers, body: 'Missing body' };
       
       let data: LeaderboardEntry;
       try {
@@ -99,22 +92,20 @@ export const handler = async (event: any, context: any) => {
         return { statusCode: 400, headers, body: 'Invalid JSON' };
       }
       
-      // Sanitize inputs
-      // Ensure we don't insert NaN or Infinity which crashes SQL
       const safeProfit = Number.isFinite(data.totalProfit) ? data.totalProfit : 0;
       const safeReturn = Number.isFinite(data.totalReturn) ? data.totalReturn : 0;
-      const safeName = (data.name || 'Anonymous').slice(0, 50); // Limit name length
+      const safeName = (data.name || 'Anonymous').slice(0, 50);
       const safeDate = data.date || new Date().toLocaleDateString();
       const safeTimestamp = data.timestamp || Date.now();
 
-      console.log(`Inserting score for ${safeName}: ${safeReturn}%`);
+      console.log(`Saving score for ${safeName}: ${safeReturn}%`);
 
       await client.query(
         'INSERT INTO leaderboard (name, total_profit, total_return, date, timestamp) VALUES ($1, $2, $3, $4, $5)',
         [safeName, safeProfit, safeReturn, safeDate, safeTimestamp]
       );
 
-      // Return the updated top 10 immediately
+      // Return updated leaderboard
       const result = await client.query(
         'SELECT name, total_profit as "totalProfit", total_return as "totalReturn", date, timestamp FROM leaderboard ORDER BY total_return DESC LIMIT 10'
       );
@@ -126,6 +117,8 @@ export const handler = async (event: any, context: any) => {
         timestamp: parseInt(row.timestamp)
       }));
 
+      console.log("Save successful, returning updated list.");
+
       return {
         statusCode: 200,
         headers,
@@ -134,13 +127,18 @@ export const handler = async (event: any, context: any) => {
     }
 
   } catch (error: any) {
-    console.error('DATABASE ERROR:', error);
+    console.error('DATABASE OPERATION FAILED:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Database operation failed', details: error.message }),
+      body: JSON.stringify({ 
+        error: 'Database error', 
+        details: error.message || 'Unknown error',
+        hint: "Check DATABASE_URL and SSL settings in Netlify."
+      }),
     };
   } finally {
-    await client.end();
+    // Clean up connection
+    await client.end().catch(() => {});
   }
 };

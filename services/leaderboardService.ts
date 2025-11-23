@@ -47,7 +47,6 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
 };
 
 export const saveScore = async (name: string, totalProfit: number, totalReturn: number): Promise<LeaderboardEntry[]> => {
-  // Ensure we don't send NaNs or Infinities which crash the DB
   const safeProfit = Number.isFinite(totalProfit) ? totalProfit : 0;
   const safeReturn = Number.isFinite(totalReturn) ? totalReturn : 0;
   
@@ -78,21 +77,20 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
       return freshLeaderboard;
     } else {
       const errorText = await response.text();
-      console.error("Failed to save to cloud. Status:", response.status, "Error:", errorText);
+      console.error(`CLOUD SAVE FAILED (${response.status}):`, errorText);
     }
   } catch (e) {
-    console.error("Network error while saving:", e);
+    console.error("Network error while saving score:", e);
   }
 
   return localResult;
 };
 
 export const calculatePercentile = (profit: number): string => {
-  // Adjusted for Return % rather than just raw profit to make it more realistic for a "return" based game
-  // Using arbitrary distribution for game feel
+  // Adjusted for Return % rather than just raw profit
   const mean = 5; 
   const stdDev = 15; 
-  const z = (profit - mean) / stdDev; // Note: using profit var name but logic applies to general score
+  const z = (profit - mean) / stdDev; 
 
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp(-z * z / 2);
