@@ -33,3 +33,5 @@ export const calculateNewCapital = (capital: number, pnlPercent: number): number
   return capital * (1 + pnlPercent);
 };
 
+
+
