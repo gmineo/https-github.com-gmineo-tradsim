@@ -1,11 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { Button } from './Button';
-import { Activity, Loader2, Trophy, Medal, Sliders } from 'lucide-react';
+import { Activity, Loader2, Trophy, Sliders } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { getCombinedLeaderboard } from '../services/leaderboardService';
 import { LeaderboardEntry } from '../types';
 import { GAME_CONFIG } from '../constants';
+import { getRankIcon } from '../utils/leaderboard';
 
 interface IntroScreenProps {
   onStart: (rounds: number) => void;
@@ -34,13 +35,6 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
   const handleStart = () => {
     audioService.init(); // Initialize AudioContext on user gesture
     onStart(roundCount);
-  };
-
-  const getRankIcon = (index: number) => {
-    if (index === 0) return <Trophy size={14} className="text-yellow-400" />;
-    if (index === 1) return <Medal size={14} className="text-slate-300" />;
-    if (index === 2) return <Medal size={14} className="text-amber-600" />;
-    return <span className="text-slate-500 text-xs font-mono w-3.5 text-center">{index + 1}</span>;
   };
 
   return (

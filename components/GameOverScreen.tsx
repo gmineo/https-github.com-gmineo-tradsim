@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TradeResult, LeaderboardEntry, RankInfo, Achievement } from '../types';
 import { Button } from './Button';
-import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Trophy, RefreshCw, Save, User, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { saveScore, getCombinedLeaderboard, calculatePercentile } from '../services/leaderboardService';
 import { playerService } from '../services/playerService';
 import { formatCurrency, formatPercentage } from '../utils/formatters';
 import { calculateTotalProfit, calculateAverageReturn, calculateWinRate, getBestTrade } from '../utils/calculations';
 import { PLAYER_CONFIG } from '../constants';
+import { getRankIconLarge } from '../utils/leaderboard';
 
 interface GameOverScreenProps {
   history: TradeResult[];
@@ -100,13 +101,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getRankIcon = (index: number) => {
-    if (index === 0) return <Trophy size={16} className="text-yellow-400" />;
-    if (index === 1) return <Medal size={16} className="text-slate-300" />;
-    if (index === 2) return <Medal size={16} className="text-amber-600" />;
-    return <span className="text-slate-500 text-sm font-mono">#{index + 1}</span>;
   };
 
   // Sharing
@@ -303,7 +297,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                       className={`flex justify-between items-center p-2 border-b border-slate-700/50 last:border-0 ${isCurrentRun ? 'bg-blue-900/30' : ''}`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-5 flex justify-center">{getRankIcon(idx)}</div>
+                        <div className="w-5 flex justify-center">{getRankIconLarge(idx)}</div>
                         <span className={`font-bold text-xs ${isCurrentRun ? 'text-blue-300' : 'text-slate-300'}`}>{entry.name}</span>
                       </div>
                       <div className={`font-mono text-xs font-bold ${entry.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>

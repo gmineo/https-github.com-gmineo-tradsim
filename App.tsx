@@ -9,7 +9,6 @@ import { Button } from './components/Button';
 import { AlertTriangle } from 'lucide-react';
 import { useGameState } from './hooks/useGameState';
 import { GAME_CONFIG } from './constants';
-import { calculatePnLPercent, calculateNewCapital } from './utils/calculations';
 
 export default function App() {
   const {

@@ -45,7 +45,8 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
       stopGameLoop();
       audioService.stopTension();
     };
-  }, [stock, currentCapital, trading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stock.id, currentCapital]);
 
   const stopGameLoop = () => {
     if (intervalRef.current) {
@@ -64,8 +65,9 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
     // Force close any open position
     if (trading.isHolding && trading.entryPrice !== null) {
       const lastPrice = stock.data[stock.data.length - 1].price;
+      const baseCapital = trading.getBaseCapital();
       const pnlPercent = (lastPrice - trading.entryPrice) / trading.entryPrice;
-      finalCap = trading.liveCapital * (1 + pnlPercent);
+      finalCap = baseCapital * (1 + pnlPercent);
       
       const newStats = {
         tradeCount: stats.tradeCount + 1,
@@ -77,7 +79,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
     } else {
       onComplete(finalCap, stats);
     }
-  }, [stock.data, onComplete, trading]);
+  }, [stock.data.length, onComplete]);
 
   // Game Loop
   useEffect(() => {
@@ -103,7 +105,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
     }, GAME_CONFIG.GAME_SPEED_MS);
 
     return () => stopGameLoop();
-  }, [stock.data, handleGameEnd, trading]);
+  }, [stock.data.length, handleGameEnd]);
 
   // Interaction Handlers
   const handleStartTrade = () => {
@@ -112,17 +114,14 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
   };
 
   const handleEndTrade = () => {
-    trading.endTrade(currentIndex, stock, (finalCapital, stats) => {
-      const profitAmt = finalCapital - trading.getBaseCapital();
-      const pnlPercent = stats.bestTradePct > -Infinity ? stats.bestTradePct : 0;
-
+    trading.endTrade(currentIndex, stock, (finalCapital, tradeProfit, tradePnlPercent, stats) => {
       // Visual feedback
-      if (pnlPercent > 0) {
-        setPopEffect({ show: true, text: `+$${Math.floor(profitAmt)}`, color: 'text-emerald-400' });
-        if (pnlPercent > TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-green');
+      if (tradePnlPercent > 0) {
+        setPopEffect({ show: true, text: `+$${Math.floor(tradeProfit)}`, color: 'text-emerald-400' });
+        if (tradePnlPercent > TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-green');
       } else {
-        setPopEffect({ show: true, text: `-$${Math.abs(Math.floor(profitAmt))}`, color: 'text-red-500' });
-        if (pnlPercent < -TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-red');
+        setPopEffect({ show: true, text: `-$${Math.abs(Math.floor(tradeProfit))}`, color: 'text-red-500' });
+        if (tradePnlPercent < -TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-red');
       }
 
       setTimeout(() => setShakeClass(''), TRADING_CONFIG.SHAKE_DURATION);

@@ -3,6 +3,7 @@ import { StockData, TradeResult } from '../types';
 import { Button } from './Button';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { formatPercentage, formatCurrency } from '../utils/formatters';
+import { getValueColor } from '../utils/colors';
 
 interface AnalysisScreenProps {
   result: TradeResult;
@@ -11,7 +12,6 @@ interface AnalysisScreenProps {
 }
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, stock }) => {
-  const getColor = (val: number) => val >= 0 ? 'text-emerald-400' : 'text-red-400';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 animate-in fade-in duration-300">
@@ -44,7 +44,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
                 }
              </div>
              
-             <div className={`text-5xl font-black mb-4 mt-1 ${getColor(result.userReturnPercent)}`}>
+             <div className={`text-5xl font-black mb-4 mt-1 ${getValueColor(result.userReturnPercent)}`}>
                 {formatPercentage(result.userReturnPercent)}
              </div>
              
@@ -58,7 +58,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
             <div className="flex flex-col">
               <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">BUY & HOLD ({result.ticker})</span>
-              <div className={`text-2xl font-black ${getColor(result.stockReturnPercent)}`}>
+              <div className={`text-2xl font-black ${getValueColor(result.stockReturnPercent)}`}>
                 {formatPercentage(result.stockReturnPercent)}
               </div>
             </div>
@@ -68,7 +68,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/30 flex justify-between items-center">
              <div className="flex flex-col">
                 <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">BUY & HOLD (S&P 500)</span>
-                <div className={`text-2xl font-black ${getColor(result.sp500ReturnPercent)}`}>
+                <div className={`text-2xl font-black ${getValueColor(result.sp500ReturnPercent)}`}>
                   {formatPercentage(result.sp500ReturnPercent)}
                 </div>
              </div>

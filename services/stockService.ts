@@ -1,4 +1,5 @@
 import { StockData, PricePoint } from '../types';
+import { DATASET_POOL, SPX_FALLBACK_PRICE, GAME_CONFIG } from '../constants';
 
 interface SimplePoint {
   timestamp: number;
@@ -134,8 +135,6 @@ const parseSPXData = (csvText: string): SimplePoint[] => {
   // Important: Sort Ascending for interpolation logic
   return points.sort((a, b) => a.timestamp - b.timestamp);
 };
-
-import { DATASET_POOL, SPX_FALLBACK_PRICE, GAME_CONFIG } from '../constants';
 
 export const loadGameData = async (numberOfRounds: number = 3): Promise<StockData[]> => {
   try {

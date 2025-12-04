@@ -30,15 +30,16 @@ interface UseTradingReturn {
   completedTrades: TradeSegment[];
   tradeStartPoint: Point | null;
   stats: TradingStats;
-  startTrade: (currentIndex: number, stock: StockData, currentCapital: number) => void;
+  startTrade: (currentIndex: number, stock: StockData) => void;
   endTrade: (
     currentIndex: number,
     stock: StockData,
-    onComplete: (finalCapital: number, stats: TradingStats) => void
+    onComplete: (finalCapital: number, tradeProfit: number, tradePnlPercent: number, stats: TradingStats) => void
   ) => void;
-  updateLiveCapital: (currentIndex: number, stock: StockData, currentCapital: number) => void;
+  updateLiveCapital: (currentIndex: number, stock: StockData) => void;
   reset: (initialCapital: number) => void;
   getFinalStats: () => TradingStats;
+  getBaseCapital: () => number;
 }
 
 const vibrate = (pattern: number | number[]) => {
@@ -83,16 +84,17 @@ export const useTrading = (initialCapital: number): UseTradingReturn => {
   const endTrade = useCallback((
     currentIndex: number,
     stock: StockData,
-    onComplete: (finalCapital: number, stats: TradingStats) => void
+    onComplete: (finalCapital: number, tradeProfit: number, tradePnlPercent: number, stats: TradingStats) => void
   ) => {
     if (!isHolding || entryPrice === null) return;
 
     const currentDataPoint = stock.data[currentIndex];
     const currentPrice = currentDataPoint.price;
     
+    const capitalBeforeTrade = capitalRef.current;
     const pnlPercent = calculatePnLPercent(entryPrice, currentPrice);
-    const newCapital = calculateNewCapital(capitalRef.current, pnlPercent);
-    const profitAmt = newCapital - capitalRef.current;
+    const newCapital = calculateNewCapital(capitalBeforeTrade, pnlPercent);
+    const tradeProfit = newCapital - capitalBeforeTrade;
 
     audioService.stopTension();
 
@@ -133,7 +135,7 @@ export const useTrading = (initialCapital: number): UseTradingReturn => {
     setBestTradePct(newBestTrade);
     setWorstTradePct(newWorstTrade);
 
-    onComplete(newCapital, {
+    onComplete(newCapital, tradeProfit, pnlPercent, {
       tradeCount: newTradeCount,
       winningTrades: newWinningTrades,
       bestTradePct: newBestTrade,
