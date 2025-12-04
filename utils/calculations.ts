@@ -35,3 +35,4 @@ export const calculateNewCapital = (capital: number, pnlPercent: number): number
 
 
 
+
