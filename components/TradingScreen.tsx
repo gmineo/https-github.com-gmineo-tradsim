@@ -3,31 +3,14 @@ import { AreaChart, Area, YAxis, XAxis, ResponsiveContainer, Tooltip, ReferenceL
 import { StockData } from '../types';
 import { audioService } from '../services/audioService';
 import { TrendingUp } from 'lucide-react';
+import { useTrading } from '../hooks/useTrading';
+import { GAME_CONFIG, TRADING_CONFIG } from '../constants';
 
 interface TradingScreenProps {
   stock: StockData;
   currentCapital: number;
-  onComplete: (finalCapital: number, tradeCount: number, winningTrades: number, bestTrade: number, worstTrade: number) => void;
+  onComplete: (finalCapital: number, stats: { tradeCount: number; winningTrades: number; bestTradePct: number; worstTradePct: number }) => void;
 }
-
-interface Point {
-  date: string;
-  price: number;
-  index: number;
-}
-
-interface TradeSegment {
-  start: Point;
-  end: Point;
-  pnlPercent: number;
-}
-
-// Helper for Haptics
-const vibrate = (pattern: number | number[]) => {
-  if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    navigator.vibrate(pattern);
-  }
-};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -45,49 +28,24 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapital, onComplete }) => {
-  // Game State
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isHolding, setIsHolding] = useState(false);
-  const [entryPrice, setEntryPrice] = useState<number | null>(null);
-  const [liveCapital, setLiveCapital] = useState(currentCapital);
-  
-  // Visual Feedback State
   const [shakeClass, setShakeClass] = useState('');
   const [popEffect, setPopEffect] = useState<{show: boolean, text: string, color: string} | null>(null);
   
-  // Visual Trade History State
-  const [completedTrades, setCompletedTrades] = useState<TradeSegment[]>([]);
-  const [tradeStartPoint, setTradeStartPoint] = useState<Point | null>(null);
-  
-  // Stats tracking
-  const [tradeCount, setTradeCount] = useState(0);
-  const [winningTrades, setWinningTrades] = useState(0);
-  const [bestTradePct, setBestTradePct] = useState(-Infinity);
-  const [worstTradePct, setWorstTradePct] = useState(Infinity);
-
-  // Refs
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const capitalRef = useRef(currentCapital);
 
-  // Constants
-  const GAME_SPEED_MS = 80;
-  const INITIAL_VISIBLE_POINTS = 20;
+  const trading = useTrading(currentCapital);
 
   useEffect(() => {
-    setCurrentIndex(INITIAL_VISIBLE_POINTS - 1);
-    capitalRef.current = currentCapital;
-    setLiveCapital(currentCapital);
-    setCompletedTrades([]);
-    setTradeStartPoint(null);
-    setIsHolding(false);
-    setEntryPrice(null);
+    setCurrentIndex(GAME_CONFIG.INITIAL_VISIBLE_POINTS - 1);
+    trading.reset(currentCapital);
     
     return () => {
       stopGameLoop();
       audioService.stopTension();
     };
-  }, [stock]);
+  }, [stock, currentCapital, trading]);
 
   const stopGameLoop = () => {
     if (intervalRef.current) {
@@ -100,26 +58,26 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
     stopGameLoop();
     audioService.stopTension();
     
-    let finalCap = capitalRef.current;
-    let bTrade = bestTradePct;
-    let wTrade = worstTradePct;
-    let tCount = tradeCount;
-    let wCount = winningTrades;
+    const stats = trading.getFinalStats();
+    let finalCap = trading.liveCapital;
 
     // Force close any open position
-    if (isHolding && entryPrice !== null) {
+    if (trading.isHolding && trading.entryPrice !== null) {
       const lastPrice = stock.data[stock.data.length - 1].price;
-      const pnlPercent = (lastPrice - entryPrice) / entryPrice;
-      finalCap = capitalRef.current * (1 + pnlPercent);
+      const pnlPercent = (lastPrice - trading.entryPrice) / trading.entryPrice;
+      finalCap = trading.liveCapital * (1 + pnlPercent);
       
-      tCount++;
-      if (pnlPercent > 0) wCount++;
-      bTrade = Math.max(bTrade, pnlPercent);
-      wTrade = Math.min(wTrade, pnlPercent);
+      const newStats = {
+        tradeCount: stats.tradeCount + 1,
+        winningTrades: pnlPercent > 0 ? stats.winningTrades + 1 : stats.winningTrades,
+        bestTradePct: Math.max(stats.bestTradePct, pnlPercent),
+        worstTradePct: Math.min(stats.worstTradePct, pnlPercent),
+      };
+      onComplete(finalCap, newStats);
+    } else {
+      onComplete(finalCap, stats);
     }
-
-    onComplete(finalCap, tCount, wCount, bTrade, wTrade);
-  }, [isHolding, entryPrice, stock.data, onComplete, bestTradePct, worstTradePct, tradeCount, winningTrades]);
+  }, [stock.data, onComplete, trading]);
 
   // Game Loop
   useEffect(() => {
@@ -134,112 +92,47 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
           return prev;
         }
 
-        const currentPrice = stock.data[next].price;
-
         // AUDIO: Tick Sound
         audioService.playTick();
 
         // Update Capital & Haptics during trade
-        if (isHolding && entryPrice !== null) {
-          const pnlPercent = (currentPrice - entryPrice) / entryPrice;
-          setLiveCapital(capitalRef.current * (1 + pnlPercent));
-
-          // Haptic feedback on significant moves
-          const prevPrice = stock.data[prev].price;
-          if (Math.abs(currentPrice - prevPrice) / prevPrice > 0.01) {
-             vibrate(10); 
-          }
-        } else {
-          setLiveCapital(capitalRef.current);
-        }
+        trading.updateLiveCapital(next, stock);
 
         return next;
       });
-    }, GAME_SPEED_MS);
+    }, GAME_CONFIG.GAME_SPEED_MS);
 
     return () => stopGameLoop();
-  }, [stock.data, isHolding, entryPrice, handleGameEnd]);
+  }, [stock.data, handleGameEnd, trading]);
 
   // Interaction Handlers
-  const startTrade = () => {
+  const handleStartTrade = () => {
     if (currentIndex >= stock.data.length - 1) return;
-    if (isHolding) return;
-
-    const currentDataPoint = stock.data[currentIndex];
-    const currentPrice = currentDataPoint.price;
-    
-    setIsHolding(true);
-    setEntryPrice(currentPrice);
-    
-    setTradeStartPoint({
-      date: currentDataPoint.date,
-      price: currentPrice,
-      index: currentIndex
-    });
-
-    // JUICE: Sound + Haptic
-    audioService.startTension();
-    vibrate(50);
+    trading.startTrade(currentIndex, stock);
   };
 
-  const endTrade = () => {
-    if (!isHolding || entryPrice === null) return;
+  const handleEndTrade = () => {
+    trading.endTrade(currentIndex, stock, (finalCapital, stats) => {
+      const profitAmt = finalCapital - trading.getBaseCapital();
+      const pnlPercent = stats.bestTradePct > -Infinity ? stats.bestTradePct : 0;
 
-    const currentDataPoint = stock.data[currentIndex];
-    const currentPrice = currentDataPoint.price;
-    
-    const pnlPercent = (currentPrice - entryPrice) / entryPrice;
-    const newCapital = capitalRef.current * (1 + pnlPercent);
-    const profitAmt = newCapital - capitalRef.current;
-
-    // JUICE: Stop Tension
-    audioService.stopTension();
-
-    // JUICE: Result Feedback
-    if (pnlPercent > 0) {
-        audioService.playWin();
-        vibrate([50, 50, 50]); 
+      // Visual feedback
+      if (pnlPercent > 0) {
         setPopEffect({ show: true, text: `+$${Math.floor(profitAmt)}`, color: 'text-emerald-400' });
-        if (pnlPercent > 0.1) setShakeClass('animate-shake-green');
-    } else {
-        audioService.playLoss();
-        vibrate(200); 
+        if (pnlPercent > TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-green');
+      } else {
         setPopEffect({ show: true, text: `-$${Math.abs(Math.floor(profitAmt))}`, color: 'text-red-500' });
-        if (pnlPercent < -0.1) setShakeClass('animate-shake-red');
-    }
+        if (pnlPercent < -TRADING_CONFIG.SHAKE_THRESHOLD) setShakeClass('animate-shake-red');
+      }
 
-    setTimeout(() => setShakeClass(''), 500);
-    setTimeout(() => setPopEffect(null), 1000);
-
-    // Update State
-    capitalRef.current = newCapital;
-    setLiveCapital(newCapital);
-    
-    if (tradeStartPoint) {
-      setCompletedTrades(prev => [...prev, {
-        start: tradeStartPoint,
-        end: {
-          date: currentDataPoint.date,
-          price: currentPrice,
-          index: currentIndex
-        },
-        pnlPercent: pnlPercent
-      }]);
-    }
-
-    setIsHolding(false);
-    setEntryPrice(null);
-    setTradeStartPoint(null);
-
-    setTradeCount(prev => prev + 1);
-    if (pnlPercent > 0) setWinningTrades(prev => prev + 1);
-    setBestTradePct(prev => Math.max(prev, pnlPercent));
-    setWorstTradePct(prev => Math.min(prev, pnlPercent));
+      setTimeout(() => setShakeClass(''), TRADING_CONFIG.SHAKE_DURATION);
+      setTimeout(() => setPopEffect(null), TRADING_CONFIG.POP_EFFECT_DURATION);
+    });
   };
 
   // Handlers for buttons
-  const handleMouseDown = () => startTrade();
-  const handleMouseUp = () => endTrade();
+  const handleMouseDown = () => handleStartTrade();
+  const handleMouseUp = () => handleEndTrade();
 
   // Memoized Chart Data
   const chartData = useMemo(() => {
@@ -250,13 +143,13 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
   }, [stock.data, currentIndex]);
 
   // Current PnL for UI
-  const unrealizedPnL = isHolding 
-    ? liveCapital - capitalRef.current
+  const unrealizedPnL = trading.isHolding 
+    ? trading.liveCapital - trading.getBaseCapital()
     : 0;
   
   // JUICE: Dynamic Border
   let borderClass = "border-slate-900"; 
-  if (isHolding) {
+  if (trading.isHolding) {
     if (unrealizedPnL > 0) borderClass = "border-emerald-500/50 shadow-[inset_0_0_20px_rgba(16,185,129,0.2)]";
     else if (unrealizedPnL < 0) borderClass = "border-red-500/50 shadow-[inset_0_0_20px_rgba(239,68,68,0.2)]";
   }
@@ -339,7 +232,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
             />
 
             {/* Render Previous Trades */}
-            {completedTrades.map((trade, idx) => (
+            {trading.completedTrades.map((trade, idx) => (
               <ReferenceLine
                 key={`trade-${idx}`}
                 segment={[
@@ -352,10 +245,10 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
             ))}
 
             {/* Render Current Trade */}
-            {isHolding && tradeStartPoint && (
+            {trading.isHolding && trading.tradeStartPoint && (
               <ReferenceLine
                 segment={[
-                  { x: tradeStartPoint.date, y: tradeStartPoint.price },
+                  { x: trading.tradeStartPoint.date, y: trading.tradeStartPoint.price },
                   { x: stock.data[currentIndex].date, y: stock.data[currentIndex].price }
                 ]}
                 stroke={unrealizedPnL >= 0 ? "#10b981" : "#ef4444"}
@@ -370,7 +263,7 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
       <div className="px-6 mb-2 flex justify-between items-end">
           <div className="flex flex-col">
             <span className="text-xs text-slate-400 font-bold uppercase">Equity</span>
-            <span className="text-2xl font-mono font-bold text-white">${Math.floor(liveCapital).toLocaleString()}</span>
+            <span className="text-2xl font-mono font-bold text-white">${Math.floor(trading.liveCapital).toLocaleString()}</span>
           </div>
           <div className="flex flex-col items-end">
             <span className="text-xs text-slate-400 font-bold uppercase">Unrealized P&L</span>
@@ -383,15 +276,15 @@ export const TradingScreen: React.FC<TradingScreenProps> = ({ stock, currentCapi
       {/* CONTROLS: Single Giant Button */}
       <div className="h-24 bg-slate-800 border-t border-slate-700">
         <button
-          className={`w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${isHolding ? 'bg-emerald-600 text-white' : 'text-emerald-500 hover:bg-emerald-900/20'}`}
+          className={`w-full h-full flex flex-col items-center justify-center gap-1 transition-all active:scale-95 ${trading.isHolding ? 'bg-emerald-600 text-white' : 'text-emerald-500 hover:bg-emerald-900/20'}`}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onTouchStart={handleMouseDown}
           onTouchEnd={handleMouseUp}
         >
-            <TrendingUp size={32} className={isHolding ? 'animate-bounce' : ''} />
-            <span className="font-black tracking-widest text-lg">{isHolding ? 'RELEASE TO SELL' : 'HOLD TO BUY'}</span>
+            <TrendingUp size={32} className={trading.isHolding ? 'animate-bounce' : ''} />
+            <span className="font-black tracking-widest text-lg">{trading.isHolding ? 'RELEASE TO SELL' : 'HOLD TO BUY'}</span>
         </button>
       </div>
     </div>

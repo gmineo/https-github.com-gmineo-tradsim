@@ -5,6 +5,9 @@ import { Button } from './Button';
 import { Trophy, RefreshCw, Save, User, Medal, Twitter, Linkedin, Star, Zap, Footprints, Crosshair, Gem, Skull, Crown, Award, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { saveScore, getCombinedLeaderboard, calculatePercentile } from '../services/leaderboardService';
 import { playerService } from '../services/playerService';
+import { formatCurrency, formatPercentage } from '../utils/formatters';
+import { calculateTotalProfit, calculateAverageReturn, calculateWinRate, getBestTrade } from '../utils/calculations';
+import { PLAYER_CONFIG } from '../constants';
 
 interface GameOverScreenProps {
   history: TradeResult[];
@@ -40,36 +43,13 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
   // Refs to prevent double processing in StrictMode
   const processedRef = useRef(false);
 
-  // Calculate totals
-  const totalProfit = history.reduce((acc, curr) => acc + (curr.finalCapital - curr.initialCapital), 0);
-  
-  const averageUserReturn = history.length > 0
-    ? history.reduce((acc, curr) => acc + curr.userReturnPercent, 0) / history.length
-    : 0;
-
-  const averageStockReturn = history.length > 0
-    ? history.reduce((acc, curr) => acc + curr.stockReturnPercent, 0) / history.length
-    : 0;
-
-  const averageSP500Return = history.length > 0 
-    ? history.reduce((acc, curr) => acc + curr.sp500ReturnPercent, 0) / history.length 
-    : 0;
-  
-  const bestTrade = Math.max(...history.map(h => h.bestTradePct).filter(n => n !== -Infinity));
-  const totalTrades = history.reduce((acc, curr) => acc + curr.tradeCount, 0);
-  const totalWins = history.reduce((acc, curr) => acc + curr.winningTrades, 0);
-  const winRate = totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0;
-
-  const formatCurrency = (val: number) => {
-    const sign = val >= 0 ? '+' : '';
-    return `${sign}$${Math.abs(Math.floor(val))}`;
-  };
-
-  const formatPct = (val: number) => {
-    if (val === -Infinity || val === Infinity) return '0.0%';
-    const sign = val >= 0 ? '+' : '';
-    return `${sign}${(val).toFixed(1)}%`; 
-  };
+  // Calculate totals using utility functions
+  const totalProfit = calculateTotalProfit(history);
+  const averageUserReturn = calculateAverageReturn(history, 'userReturnPercent');
+  const averageStockReturn = calculateAverageReturn(history, 'stockReturnPercent');
+  const averageSP500Return = calculateAverageReturn(history, 'sp500ReturnPercent');
+  const bestTrade = getBestTrade(history);
+  const winRate = calculateWinRate(history);
   
   // Process Game Result & Progression ONCE
   useEffect(() => {
@@ -131,7 +111,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
 
   // Sharing
   const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
-  const shareText = `I just achieved a ${formatPct(averageUserReturn)} average return on Trading Simulator! 🚀\n\nRank: ${rank?.title}\n\nCan you beat my score?`;
+  const shareText = `I just achieved a ${formatPercentage(averageUserReturn)} average return on Trading Simulator! 🚀\n\nRank: ${rank?.title}\n\nCan you beat my score?`;
   
   const shareOnTwitter = () => {
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
@@ -165,7 +145,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
           <span className="text-slate-400 text-xs font-bold uppercase block mb-2">Average Session Return</span>
           
           <div className={`text-5xl font-black mb-4 ${averageUserReturn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {formatPct(averageUserReturn)}
+            {formatPercentage(averageUserReturn)}
           </div>
           
           <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
@@ -194,7 +174,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                   <div className="flex flex-col text-center w-1/3 border-l border-slate-700/50 border-r px-2">
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">Market</div>
                      <div className={`text-xs font-bold ${trade.stockReturnPercent >= 0 ? 'text-slate-300' : 'text-slate-400'}`}>
-                        {formatPct(trade.stockReturnPercent)}
+                        {formatPercentage(trade.stockReturnPercent)}
                      </div>
                   </div>
 
@@ -203,7 +183,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1">You</div>
                      <div className={`font-mono font-black text-sm flex items-center justify-end gap-1 ${trade.userReturnPercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {trade.userReturnPercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                        {formatPct(trade.userReturnPercent)}
+                        {formatPercentage(trade.userReturnPercent)}
                      </div>
                   </div>
                </div>
@@ -289,7 +269,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
               <div className="flex gap-2">
                 <input 
                   type="text" 
-                  maxLength={12}
+                  maxLength={PLAYER_CONFIG.MAX_NAME_LENGTH}
                   placeholder="Your Name"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
@@ -341,7 +321,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ history, onResta
         <div className="grid grid-cols-2 gap-3 mb-6 max-w-md mx-auto w-full">
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Best Trade</span>
-            <span className="text-sm font-bold text-emerald-400">{formatPct(bestTrade)}</span>
+            <span className="text-sm font-bold text-emerald-400">{formatPercentage(bestTrade)}</span>
           </div>
           <div className="bg-slate-800 p-3 rounded border border-slate-700 text-center">
             <span className="text-[9px] text-slate-500 uppercase font-bold block">Accuracy</span>

@@ -1,13 +1,13 @@
 
 import { LeaderboardEntry } from '../types';
+import { LEADERBOARD_CONFIG } from '../constants';
 
-const STORAGE_KEY = 'trading_simulator_leaderboard';
 const API_URL = '/.netlify/functions/leaderboard';
 
 // --- LOCAL STORAGE HELPERS (Backup) ---
 const getLocalLeaderboard = (): LeaderboardEntry[] => {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(LEADERBOARD_CONFIG.STORAGE_KEY);
     if (!stored) return [];
     return JSON.parse(stored);
   } catch (e) {
@@ -17,8 +17,10 @@ const getLocalLeaderboard = (): LeaderboardEntry[] => {
 
 const saveLocalScore = (entry: LeaderboardEntry): LeaderboardEntry[] => {
   const current = getLocalLeaderboard();
-  const updated = [...current, entry].sort((a, b) => b.totalReturn - a.totalReturn).slice(0, 50);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  const updated = [...current, entry]
+    .sort((a, b) => b.totalReturn - a.totalReturn)
+    .slice(0, LEADERBOARD_CONFIG.MAX_LOCAL_ENTRIES);
+  localStorage.setItem(LEADERBOARD_CONFIG.STORAGE_KEY, JSON.stringify(updated));
   return updated;
 };
 
@@ -43,7 +45,9 @@ export const getCombinedLeaderboard = async (): Promise<LeaderboardEntry[]> => {
   // 2. Fallback to Local if API fails
   const localScores = getLocalLeaderboard();
   // Sort by Return % (descending)
-  return localScores.sort((a, b) => b.totalReturn - a.totalReturn).slice(0, 10);
+  return localScores
+    .sort((a, b) => b.totalReturn - a.totalReturn)
+    .slice(0, LEADERBOARD_CONFIG.MAX_DISPLAY_ENTRIES);
 };
 
 export const saveScore = async (name: string, totalProfit: number, totalReturn: number): Promise<LeaderboardEntry[]> => {
@@ -88,8 +92,8 @@ export const saveScore = async (name: string, totalProfit: number, totalReturn: 
 
 export const calculatePercentile = (profit: number): string => {
   // Adjusted for Return % rather than just raw profit
-  const mean = 5; 
-  const stdDev = 15; 
+  const mean = LEADERBOARD_CONFIG.PERCENTILE_MEAN; 
+  const stdDev = LEADERBOARD_CONFIG.PERCENTILE_STD_DEV; 
   const z = (profit - mean) / stdDev; 
 
   const t = 1 / (1 + 0.2316419 * Math.abs(z));

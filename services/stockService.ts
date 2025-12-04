@@ -8,7 +8,7 @@ interface SimplePoint {
 // Helper: Interpolate S&P 500 price for a specific timestamp
 // We use linear interpolation because SPX data is monthly but Stock data is daily.
 const getInterpolatedSPX = (timestamp: number, spxData: SimplePoint[]): number => {
-  if (spxData.length === 0) return 1000; // Fallback
+  if (spxData.length === 0) return SPX_FALLBACK_PRICE;
 
   // 1. Handle out of bounds
   if (timestamp <= spxData[0].timestamp) return spxData[0].price;
@@ -81,15 +81,14 @@ const parseCustomCSV = (
   }
 
   // OPTIMIZATION: Limit to ~450 data points (approx 36s gameplay)
-  const MAX_POINTS = 450;
   let limitedRows = parsedRows;
   
-  if (parsedRows.length > MAX_POINTS) {
+  if (parsedRows.length > GAME_CONFIG.MAX_DATA_POINTS) {
     // CRITICAL: Randomize start point. This allows the same CSV file to generate 
     // multiple different "levels" if selected multiple times.
-    const maxStart = parsedRows.length - MAX_POINTS;
+    const maxStart = parsedRows.length - GAME_CONFIG.MAX_DATA_POINTS;
     const startTrim = Math.floor(Math.random() * maxStart);
-    limitedRows = parsedRows.slice(startTrim, startTrim + MAX_POINTS);
+    limitedRows = parsedRows.slice(startTrim, startTrim + GAME_CONFIG.MAX_DATA_POINTS);
   }
 
   // Attach Real S&P 500 Data via Interpolation
@@ -136,13 +135,7 @@ const parseSPXData = (csvText: string): SimplePoint[] => {
   return points.sort((a, b) => a.timestamp - b.timestamp);
 };
 
-// Defines the pool of available files on the server
-const DATASET_POOL = [
-  { url: 'coke.csv', name: 'Coca-Cola', ticker: 'KO' },
-  { url: 'btc.csv', name: 'Bitcoin', ticker: 'BTC' },
-  { url: 'aapl.csv', name: 'Apple', ticker: 'AAPL' },
-  { url: 'tsla.csv', name: 'Tesla', ticker: 'TSLA' }
-];
+import { DATASET_POOL, SPX_FALLBACK_PRICE, GAME_CONFIG } from '../constants';
 
 export const loadGameData = async (numberOfRounds: number = 3): Promise<StockData[]> => {
   try {

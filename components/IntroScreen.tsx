@@ -5,6 +5,7 @@ import { Activity, Loader2, Trophy, Medal, Sliders } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { getCombinedLeaderboard } from '../services/leaderboardService';
 import { LeaderboardEntry } from '../types';
+import { GAME_CONFIG } from '../constants';
 
 interface IntroScreenProps {
   onStart: (rounds: number) => void;
@@ -14,7 +15,7 @@ interface IntroScreenProps {
 export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = false }) => {
   const [topPlayers, setTopPlayers] = useState<LeaderboardEntry[]>([]);
   const [loadingLb, setLoadingLb] = useState(true);
-  const [roundCount, setRoundCount] = useState(3);
+  const [roundCount, setRoundCount] = useState(GAME_CONFIG.DEFAULT_ROUNDS);
 
   useEffect(() => {
     const fetchLb = async () => {
@@ -71,8 +72,8 @@ export const IntroScreen: React.FC<IntroScreenProps> = ({ onStart, isLoading = f
           </div>
           <input 
             type="range" 
-            min="1" 
-            max="10" 
+            min={GAME_CONFIG.MIN_ROUNDS} 
+            max={GAME_CONFIG.MAX_ROUNDS} 
             value={roundCount} 
             onChange={(e) => setRoundCount(parseInt(e.target.value))}
             className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"

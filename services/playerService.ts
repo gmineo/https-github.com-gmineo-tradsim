@@ -1,6 +1,5 @@
 import { PlayerProfile, RankInfo, TradeResult, Achievement, RankTitle } from '../types';
-
-const STORAGE_KEY = 'trading_simulator_profile_v1';
+import { PLAYER_CONFIG } from '../constants';
 
 const DEFAULT_PROFILE: PlayerProfile = {
   totalCareerProfit: 0,
@@ -70,7 +69,7 @@ export const ACHIEVEMENTS: Achievement[] = [
 export const playerService = {
   getProfile: (): PlayerProfile => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(PLAYER_CONFIG.STORAGE_KEY);
       return stored ? { ...DEFAULT_PROFILE, ...JSON.parse(stored) } : DEFAULT_PROFILE;
     } catch {
       return DEFAULT_PROFILE;
@@ -114,7 +113,7 @@ export const playerService = {
     });
 
     // Save
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newProfile));
+    localStorage.setItem(PLAYER_CONFIG.STORAGE_KEY, JSON.stringify(newProfile));
 
     // Check Level Up
     const newRank = playerService.getRank(newTotalProfit);

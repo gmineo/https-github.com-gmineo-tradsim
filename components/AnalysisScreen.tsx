@@ -2,6 +2,7 @@ import React from 'react';
 import { StockData, TradeResult } from '../types';
 import { Button } from './Button';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { formatPercentage, formatCurrency } from '../utils/formatters';
 
 interface AnalysisScreenProps {
   result: TradeResult;
@@ -10,14 +11,6 @@ interface AnalysisScreenProps {
 }
 
 export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, stock }) => {
-  
-  const formatPct = (val: number) => {
-    const sign = val >= 0 ? '+' : '';
-    return `${sign}${val.toFixed(1)}%`;
-  };
-
-  const formatCurrency = (val: number) => `$${Math.floor(val)}`;
-
   const getColor = (val: number) => val >= 0 ? 'text-emerald-400' : 'text-red-400';
 
   return (
@@ -52,7 +45,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
              </div>
              
              <div className={`text-5xl font-black mb-4 mt-1 ${getColor(result.userReturnPercent)}`}>
-                {formatPct(result.userReturnPercent)}
+                {formatPercentage(result.userReturnPercent)}
              </div>
              
              <div className="flex justify-between items-center text-xs text-slate-400 font-mono">
@@ -66,7 +59,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
             <div className="flex flex-col">
               <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">BUY & HOLD ({result.ticker})</span>
               <div className={`text-2xl font-black ${getColor(result.stockReturnPercent)}`}>
-                {formatPct(result.stockReturnPercent)}
+                {formatPercentage(result.stockReturnPercent)}
               </div>
             </div>
           </div>
@@ -76,7 +69,7 @@ export const AnalysisScreen: React.FC<AnalysisScreenProps> = ({ result, onNext, 
              <div className="flex flex-col">
                 <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider mb-1">BUY & HOLD (S&P 500)</span>
                 <div className={`text-2xl font-black ${getColor(result.sp500ReturnPercent)}`}>
-                  {formatPct(result.sp500ReturnPercent)}
+                  {formatPercentage(result.sp500ReturnPercent)}
                 </div>
              </div>
              <div className="text-right text-xs font-mono text-slate-500 flex flex-col justify-center gap-1">

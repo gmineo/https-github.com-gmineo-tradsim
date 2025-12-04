@@ -4,32 +4,39 @@ import { TradingScreen } from './components/TradingScreen';
 import { AnalysisScreen } from './components/AnalysisScreen';
 import { GameOverScreen } from './components/GameOverScreen';
 import { loadGameData } from './services/stockService';
-import { GameState, StockData, TradeResult } from './types';
+import { GameState, TradeResult } from './types';
 import { Button } from './components/Button';
 import { AlertTriangle } from 'lucide-react';
+import { useGameState } from './hooks/useGameState';
+import { GAME_CONFIG } from './constants';
+import { calculatePnLPercent, calculateNewCapital } from './utils/calculations';
 
 export default function App() {
-  const [gameState, setGameState] = useState<GameState>(GameState.INTRO);
-  const [stocks, setStocks] = useState<StockData[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const {
+    gameState,
+    stocks,
+    currentIndex,
+    capital,
+    initialCapitalForCurrentStock,
+    history,
+    lastResult,
+    setGameState,
+    setStocks,
+    setCapital,
+    setInitialCapitalForCurrentStock,
+    addToHistory,
+    setLastResult,
+    resetGame,
+    moveToNextStock,
+  } = useGameState();
+
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  
-  // Global Capital State
-  const [capital, setCapital] = useState(500);
-  const [initialCapitalForCurrentStock, setInitialCapitalForCurrentStock] = useState(500);
-  
-  // History for Game Over
-  const [history, setHistory] = useState<TradeResult[]>([]);
-
-  // Temporary result holder for the Analysis Screen
-  const [lastResult, setLastResult] = useState<TradeResult | null>(null);
 
   const startGame = async (rounds: number) => {
     setIsLoading(true);
     setLoadError(null);
     try {
-      // Load random stocks based on user selection
       const newStocks = await loadGameData(rounds);
       
       if (newStocks.length === 0) {
@@ -37,12 +44,10 @@ export default function App() {
         setIsLoading(false);
         return;
       }
+      
       setStocks(newStocks);
-      setCapital(500);
-      setCurrentIndex(0);
-      setHistory([]);
+      resetGame();
       setGameState(GameState.TRADING);
-      setInitialCapitalForCurrentStock(500);
     } catch (e) {
       console.error(e);
       setLoadError("Network error or missing files.");
@@ -52,63 +57,48 @@ export default function App() {
   };
 
   const handleStockComplete = useCallback((
-    finalCapital: number, 
-    tradeCount: number, 
-    winningTrades: number, 
-    bestTrade: number, 
-    worstTrade: number
+    finalCapital: number,
+    stats: { tradeCount: number; winningTrades: number; bestTradePct: number; worstTradePct: number }
   ) => {
     // Prevent double execution if state is already updating
-    setGameState(current => {
-      if (current === GameState.ANALYSIS) return current;
-      
-      const currentStock = stocks[currentIndex];
-      
-      // Guard clause: Ensure data exists before accessing
-      if (!currentStock || !currentStock.data || currentStock.data.length === 0) {
-        console.error("Missing stock data at index", currentIndex);
-        // Skip to next or game over if critical failure, but here we just handle gracefully
-        return GameState.ANALYSIS; 
-      }
+    if (gameState === GameState.ANALYSIS) return;
+    
+    const currentStock = stocks[currentIndex];
+    
+    // Guard clause: Ensure data exists before accessing
+    if (!currentStock?.data || currentStock.data.length === 0) {
+      console.error("Missing stock data at index", currentIndex);
+      setGameState(GameState.ANALYSIS);
+      return;
+    }
 
-      const firstPrice = currentStock.data[0].price;
-      const lastPrice = currentStock.data[currentStock.data.length - 1].price;
-      
-      const sp500Start = currentStock.data[0].sp500;
-      const sp500End = currentStock.data[currentStock.data.length - 1].sp500;
+    const firstPrice = currentStock.data[0].price;
+    const lastPrice = currentStock.data[currentStock.data.length - 1].price;
+    const sp500Start = currentStock.data[0].sp500;
+    const sp500End = currentStock.data[currentStock.data.length - 1].sp500;
 
-      const result: TradeResult = {
-        stockName: currentStock.name,
-        ticker: currentStock.ticker,
-        initialCapital: initialCapitalForCurrentStock,
-        finalCapital: finalCapital,
-        userReturnPercent: ((finalCapital - initialCapitalForCurrentStock) / initialCapitalForCurrentStock) * 100,
-        stockReturnPercent: ((lastPrice - firstPrice) / firstPrice) * 100,
-        sp500ReturnPercent: ((sp500End - sp500Start) / sp500Start) * 100,
-        sp500Start,
-        sp500End,
-        tradeCount,
-        winningTrades,
-        bestTradePct: bestTrade,
-        worstTradePct: worstTrade
-      };
+    const result: TradeResult = {
+      stockName: currentStock.name,
+      ticker: currentStock.ticker,
+      initialCapital: initialCapitalForCurrentStock,
+      finalCapital: finalCapital,
+      userReturnPercent: ((finalCapital - initialCapitalForCurrentStock) / initialCapitalForCurrentStock) * 100,
+      stockReturnPercent: ((lastPrice - firstPrice) / firstPrice) * 100,
+      sp500ReturnPercent: ((sp500End - sp500Start) / sp500Start) * 100,
+      sp500Start,
+      sp500End,
+      tradeCount: stats.tradeCount,
+      winningTrades: stats.winningTrades,
+      bestTradePct: stats.bestTradePct,
+      worstTradePct: stats.worstTradePct,
+    };
 
-      setLastResult(result);
-      setHistory(prev => [...prev, result]);
-      
-      return GameState.ANALYSIS;
-    });
-  }, [stocks, currentIndex, initialCapitalForCurrentStock]);
+    addToHistory(result);
+    setGameState(GameState.ANALYSIS);
+  }, [gameState, stocks, currentIndex, initialCapitalForCurrentStock, addToHistory, setGameState]);
 
   const handleNextStock = () => {
-    if (currentIndex < stocks.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-      setCapital(500); // Reset capital to 500 for the new stock
-      setInitialCapitalForCurrentStock(500);
-      setGameState(GameState.TRADING);
-    } else {
-      setGameState(GameState.GAMEOVER);
-    }
+    moveToNextStock();
   };
 
   return (
@@ -149,7 +139,10 @@ export default function App() {
           {gameState === GameState.GAMEOVER && (
             <GameOverScreen 
               history={history} 
-              onRestart={() => setGameState(GameState.INTRO)} 
+              onRestart={() => {
+                setGameState(GameState.INTRO);
+                resetGame();
+              }} 
             />
           )}
         </>
